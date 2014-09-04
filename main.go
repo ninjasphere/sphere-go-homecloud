@@ -1,11 +1,11 @@
-// +build ignore
-
 package main
 
 import (
 	"log"
 	"os"
 	"os/signal"
+
+	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
 )
 
 func main() {
