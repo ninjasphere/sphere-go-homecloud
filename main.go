@@ -10,7 +10,7 @@ import (
 
 func main() {
 
-	homecloud.StartHomeCloud()
+	homecloud.Start()
 
 	blah := make(chan os.Signal, 1)
 	signal.Notify(blah, os.Interrupt, os.Kill)

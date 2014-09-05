@@ -1,8 +1,6 @@
 package homecloud
 
 import (
-	"fmt"
-
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -22,7 +20,7 @@ func (m *ThingModel) FetchByDeviceId(deviceId string) (*model.Thing, error) {
 	}
 
 	if device.Thing == nil {
-		return nil, fmt.Errorf("Device %s is not attached to a thing", deviceId)
+		return nil, nil
 	}
 
 	return m.Fetch(*device.Thing)
@@ -42,8 +40,8 @@ func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 		return nil, err
 	}
 
-	if thing.DeviceId != nil {
-		device, err := deviceModel.Fetch(*thing.DeviceId)
+	if thing.DeviceID != nil {
+		device, err := deviceModel.Fetch(*thing.DeviceID)
 		if err != nil {
 			return nil, err
 		}
