@@ -4,34 +4,42 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"time"
 
 	"git.eclipse.org/gitroot/paho/org.eclipse.paho.mqtt.golang.git"
-
-	"github.com/ninjasphere/go-ninja"
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
+	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/go-ninja/rpc/json2"
 	"github.com/ninjasphere/redigo/redis"
 )
+
+var log = logger.GetLogger("HomeCloud")
+
+var conn *ninja.Connection
 
 var thingModel *ThingModel
 var deviceModel *DeviceModel
 var roomModel *RoomModel
-
-var name = "sphere-go-homecloud"
+var driverModel *DriverModel
 
 var locationRegexp = regexp.MustCompile("\\$device\\/([A-F0-9]*)\\/[^\\/]*\\/location")
 
-type LocationUpdate struct {
-	Zone string `json:"zone"`
+type incomingLocationUpdate struct {
+	Zone *string `json:"zone,omitempty"`
+}
+
+type outgoingLocationUpdate struct {
+	ID         *string `json:"id"`
+	HasChanged bool    `json:"hasChanged"`
 }
 
 func Start() {
 
-	log := logger.GetLogger("HomeCloud")
-
 	redisConn, err := redis.Dial("tcp", ":6379")
 
 	if err != nil {
-		log.FatalError(err, "Couldn't connect to redit")
+		log.FatalError(err, "Couldn't connect to redis")
 	}
 
 	//defer redisConn.Close()
@@ -39,19 +47,108 @@ func Start() {
 	thingModel = NewThingModel(redisConn)
 	deviceModel = NewDeviceModel(redisConn)
 	roomModel = NewRoomModel(redisConn)
+	driverModel = NewDriverModel(redisConn)
 
-	conn, err := ninja.Connect(name)
+	conn, err = ninja.Connect("sphere-go-homecloud")
 
 	if err != nil {
 		log.FatalError(err, "Failed to connect to mqtt")
 	}
 
-	statusJob, err := ninja.CreateStatusJob(conn, name)
-	if err != nil {
-		log.FatalError(err, "Could not setup status job")
+	startManagingDrivers()
+
+	startMonitoringLocations()
+}
+
+func startDriver(node string, driverID string, config *string) error {
+
+	var rawConfig json.RawMessage
+	if config != nil {
+		rawConfig = []byte(*config)
 	}
 
-	statusJob.Start()
+	client := conn.GetServiceClient(fmt.Sprintf("$node/%s/driver/%s", node, driverID))
+	err := client.Call("start", &rawConfig, nil, 10*time.Second)
+
+	if err != nil {
+		jsonError, ok := err.(*json2.Error)
+		if ok {
+			if jsonError.Code == json2.E_INVALID_REQ {
+
+				err := driverModel.DeleteConfig(driverID)
+				if err != nil {
+					log.Warningf("Driver %s could not parse its config. Also, we couldn't clear it! errors:%s and %s", driverID, jsonError.Message, err)
+				} else {
+					log.Warningf("Driver %s could not parse its config, so we cleared it from redis. error:%s", driverID, jsonError.Message)
+				}
+
+				return startDriver(node, driverID, nil)
+			}
+		}
+	}
+
+	return err
+}
+
+func startManagingDrivers() {
+
+	conn.Subscribe("$node/:node/driver/:driver/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
+
+		log.Infof("Got driver announcement node:%s driver:%s announcement:%s", values["node"], values["driver"], announcement)
+
+		if announcement == nil {
+			log.Warningf("Nil driver announcement from node:%s driver:%s", values["node"], values["driver"])
+			return true
+		}
+
+		module := &model.Module{}
+		err := json.Unmarshal(*announcement, module)
+
+		module.Topic = fmt.Sprintf("$node/%s/driver/%s", values["node"], values["driver"])
+
+		if announcement == nil {
+			log.Warningf("Could not parse announcement from node:%s driver:%s error:%s", values["node"], values["driver"], err)
+			return true
+		}
+
+		err = driverModel.Save(module)
+		if err != nil {
+			log.Warningf("Failed to save driver announcement for %s error:%s", values["driver"], err)
+		}
+
+		config, err := driverModel.GetConfig(values["driver"])
+
+		if err != nil {
+			log.Warningf("Failed to retrieve config for driver %s error:%s", values["driver"], err)
+		} else {
+			err = startDriver(values["node"], values["driver"], config)
+			if err != nil {
+				log.Warningf("Failed to start driver: %s error:%s", values["driver"], err)
+			}
+		}
+
+		return true
+	})
+
+	conn.Subscribe("$node/:node/driver/:driver/event/config", func(config *json.RawMessage, values map[string]string) bool {
+		log.Infof("Got driver config node:%s driver:%s config:%s", values["node"], values["driver"], *config)
+
+		if config != nil {
+			err := driverModel.SetConfig(values["driver"], string(*config))
+
+			if err != nil {
+				log.Warningf("Failed to save config for driver: %s error: %s", values["driver"], err)
+			}
+		} else {
+			log.Infof("Nil config recevied from node:%s driver:%s", values["node"], values["driver"])
+		}
+
+		return true
+	})
+
+}
+
+func startMonitoringLocations() {
 
 	filter, err := mqtt.NewTopicFilter("$device/+/+/location", 0)
 	if err != nil {
@@ -62,27 +159,10 @@ func Start() {
 
 		deviceID := locationRegexp.FindAllStringSubmatch(message.Topic(), -1)[0][1]
 
-		update := &LocationUpdate{}
+		update := &incomingLocationUpdate{}
 		err := json.Unmarshal(message.Payload(), update)
 		if err != nil {
 			log.Errorf("Failed to parse location update %s to %s : %s", message.Payload(), message.Topic(), err)
-			return
-		}
-
-		log.Debugf("< Incoming location update: device %s is in zone %s", deviceID, update.Zone)
-
-		// XXX: TODO: Remove me once the cloud room model is sync'd and locatino service uses it
-		room, err := roomModel.Fetch(update.Zone)
-		if err != nil {
-			log.FatalError(err, fmt.Sprintf("Failed to fetch room %s", update.Zone))
-		}
-
-		if room == nil {
-			log.Infof("Unknown room %s. Advising remote location service to forget it.", update.Zone)
-
-			pubReceipt := conn.GetMqttClient().Publish(mqtt.QoS(0), "$location/delete", message.Payload())
-			<-pubReceipt
-
 			return
 		}
 
@@ -91,17 +171,65 @@ func Start() {
 			log.FatalError(err, fmt.Sprintf("Failed to fetch thing by device id %s", deviceID))
 		}
 
-		if thing != nil {
-			if *thing.Location == update.Zone {
-				// It's already there
-				return
-			}
-			err := roomModel.MoveThing(thing.Location, &update.Zone, thing.ID)
-
-			if err != nil {
-				log.FatalError(err, fmt.Sprintf("Failed to update location of thing %s", thing.ID))
-			}
+		if update.Zone == nil {
+			log.Debugf("< Incoming location update: device %s not in a zone", deviceID)
+		} else {
+			log.Debugf("< Incoming location update: device %s is in zone %s", deviceID, *update.Zone)
 		}
+
+		hasChangedZone := true
+
+		if thing == nil {
+			log.Debugf("Device %s is not attached to a thing. Ignoring.", deviceID)
+		} else {
+
+			if (thing.Location != nil && update.Zone != nil && *thing.Location == *update.Zone) || (thing.Location == nil && update.Zone == nil) {
+				// It's already there
+				log.Debugf("Thing %s (%s) (Device %s) was already in that zone.", thing.ID, thing.Name, deviceID)
+				hasChangedZone = true
+			} else {
+
+				log.Debugf("Thing %s (%s) (Device %s) moved from %s to %s", thing.ID, thing.Name, deviceID, thing.Location, update.Zone)
+
+				err = roomModel.MoveThing(thing.Location, update.Zone, thing.ID)
+
+				if err != nil {
+					log.FatalError(err, fmt.Sprintf("Failed to update location of thing %s", thing.ID))
+				}
+
+				err = thingModel.SetLocation(thing.ID, update.Zone)
+				if err != nil {
+					log.FatalError(err, fmt.Sprintf("Failed to update location property of thing %s", thing.ID))
+				}
+
+				if update.Zone != nil {
+					room, err := roomModel.Fetch(*update.Zone)
+					if err != nil {
+						log.FatalError(err, fmt.Sprintf("Failed to fetch room %s", *update.Zone))
+					}
+
+					if room == nil {
+						// XXX: TODO: Remove me once the cloud room model is sync'd and locatino service uses it
+						log.Infof("Unknown room %s. Advising remote location service to forget it.", *update.Zone)
+
+						pubReceipt := conn.GetMqttClient().Publish(mqtt.QoS(0), "$location/delete", message.Payload())
+						<-pubReceipt
+					}
+				}
+			}
+
+			topic := fmt.Sprintf("$device/%s/channel/%s/%s/event/state", deviceID, "location", "location")
+
+			payload, _ := json.Marshal(&outgoingLocationUpdate{
+				ID:         update.Zone,
+				HasChanged: hasChangedZone,
+			})
+
+			pubReceipt := conn.GetMqttClient().Publish(mqtt.QoS(0), topic, payload)
+			<-pubReceipt
+
+		}
+
 	}, filter)
 
 	if err != nil {
@@ -109,5 +237,4 @@ func Start() {
 	}
 
 	<-receipt
-
 }

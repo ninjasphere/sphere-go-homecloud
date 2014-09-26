@@ -26,6 +26,19 @@ func (m *ThingModel) FetchByDeviceId(deviceId string) (*model.Thing, error) {
 	return m.Fetch(*device.Thing)
 }
 
+func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
+
+	var err error
+
+	if roomID == nil {
+		_, err = m.conn.Do("HDEL", "thing:"+thingID, "location")
+	} else {
+		_, err = m.conn.Do("HSET", "thing:"+thingID, "location", *roomID)
+	}
+
+	return err
+}
+
 func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 
 	item, err := redis.Values(m.conn.Do("HGETALL", "thing:"+id))

@@ -42,23 +42,28 @@ func (m *RoomModel) Fetch(id string) (*model.Room, error) {
 func (m *RoomModel) MoveThing(from *string, to *string, thing string) error {
 	var err error
 
-	src := "room:" + *from + "s:things"
-	dest := "room:" + *to + ":things"
-
 	if to != nil && from == nil {
-
 		// we need to add it
+
+		dest := "room:" + *to + ":things"
+
 		m.log.Debugf("Adding thing %s to room %s", thing, *to)
 		_, err = m.conn.Do("SADD", dest, thing)
 
 	} else if from != nil && to == nil {
-
 		// we need to remove it
+
+		src := "room:" + *from + "s:things"
+
 		m.log.Debugf("Removing thing %s from room %s", thing, *from)
 		_, err = m.conn.Do("SREM", src, thing)
 
 	} else {
 		// need to move it
+
+		src := "room:" + *from + "s:things"
+		dest := "room:" + *to + ":things"
+
 		m.log.Debugf("Moving thing %s from room %s to room %s", thing, *from, *to)
 
 		result, err2 := m.conn.Do("SMOVE", src, dest, thing)
