@@ -179,6 +179,33 @@ func startManagingDevices() {
 		return true
 	})
 
+	conn.Subscribe("$device/:device/channel/:channel/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
+
+		deviceID, channelID := values["device"], values["channel"]
+
+		log.Infof("Got channel announcement device:%s channel:%s announcement:%s", deviceID, channelID, announcement)
+
+		if announcement == nil {
+			log.Warningf("Nil channel announcement from device:%s channel:%s", deviceID, channelID)
+			return true
+		}
+
+		channel := &model.Channel{}
+		err := json.Unmarshal(*announcement, channel)
+
+		if announcement == nil {
+			log.Warningf("Could not parse channel announcement from device:%s channel:%s error:%s", deviceID, channelID, err)
+			return true
+		}
+
+		err = deviceModel.AddChannel(channel)
+		if err != nil {
+			log.Warningf("Failed to save channel announcement for device:%s channel:%s error:%s", deviceID, channelID, err)
+		}
+
+		return true
+	})
+
 }
 
 func startMonitoringLocations() {
