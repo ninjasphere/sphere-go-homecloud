@@ -56,7 +56,7 @@ func Start() {
 	}
 
 	startManagingDrivers()
-
+	startManagingDevices()
 	startMonitoringLocations()
 }
 
@@ -65,6 +65,8 @@ func startDriver(node string, driverID string, config *string) error {
 	var rawConfig json.RawMessage
 	if config != nil {
 		rawConfig = []byte(*config)
+	} else {
+		rawConfig = []byte("{}")
 	}
 
 	client := conn.GetServiceClient(fmt.Sprintf("$node/%s/driver/%s", node, driverID))
@@ -106,8 +108,6 @@ func startManagingDrivers() {
 		module := &model.Module{}
 		err := json.Unmarshal(*announcement, module)
 
-		module.Topic = fmt.Sprintf("$node/%s/driver/%s", node, driver)
-
 		if announcement == nil {
 			log.Warningf("Could not parse announcement from node:%s driver:%s error:%s", node, driver, err)
 			return true
@@ -143,6 +143,37 @@ func startManagingDrivers() {
 			}
 		} else {
 			log.Infof("Nil config recevied from node:%s driver:%s", values["node"], values["driver"])
+		}
+
+		return true
+	})
+
+}
+
+func startManagingDevices() {
+
+	conn.Subscribe("$device/:id/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
+
+		id := values["id"]
+
+		log.Infof("Got device announcement device:%s announcement:%s", id, announcement)
+
+		if announcement == nil {
+			log.Warningf("Nil driver announcement from device:%s", id)
+			return true
+		}
+
+		device := &model.Device{}
+		err := json.Unmarshal(*announcement, device)
+
+		if announcement == nil {
+			log.Warningf("Could not parse announcement from device:%s error:%s", id, err)
+			return true
+		}
+
+		err = deviceModel.Create(device)
+		if err != nil {
+			log.Warningf("Failed to save device announcement for device:%s error:%s", id, err)
 		}
 
 		return true
