@@ -6,26 +6,24 @@ import (
 )
 
 type DeviceModel struct {
-	conn redis.Conn
+	baseModel
 }
 
 func NewDeviceModel(conn redis.Conn) *DeviceModel {
-	return &DeviceModel{conn}
+	return &DeviceModel{baseModel{conn, "device"}}
 }
 
 func (m *DeviceModel) Fetch(id string) (*model.Device, error) {
 
-	item, err := redis.Values(m.conn.Do("HGETALL", "device:"+id))
-
-	if err != nil {
-		return nil, err
-	}
-
 	device := &model.Device{}
 
-	if err := redis.ScanStruct(item, device); err != nil {
+	if err := m.fetch(id, device); err != nil {
 		return nil, err
 	}
 
 	return device, nil
+}
+
+func (m *DeviceModel) Create(device *model.Device) error {
+	return m.create(device.ID, device)
 }

@@ -1,51 +1,31 @@
 package homecloud
 
 import (
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
 
 type DriverModel struct {
-	conn redis.Conn
+	baseModel
 }
 
 func NewDriverModel(conn redis.Conn) *DriverModel {
-	return &DriverModel{conn}
+	return &DriverModel{baseModel{conn, "driver"}}
 }
 
-func (m *DriverModel) Fetch(driverID string) (*model.Module, error) {
-
-	item, err := redis.Values(m.conn.Do("HGETALL", "driver:"+driverID))
-
-	if err != nil {
-		return nil, err
-	}
-
-	if len(item) == 0 {
-		return nil, nil
-	}
+func (m *DriverModel) Fetch(id string) (*model.Module, error) {
 
 	module := &model.Module{}
 
-	if err := redis.ScanStruct(item, module); err != nil {
+	if err := m.fetch(id, module); err != nil {
 		return nil, err
 	}
 
 	return module, nil
 }
 
-func (m *DriverModel) Save(module *model.Module) error {
-
-	args := redis.Args{}
-	args = args.Add("driver:" + module.ID)
-	args = args.AddFlat(module)
-
-	spew.Dump(args)
-
-	_, err := m.conn.Do("HMSET", args...)
-
-	return err
+func (m *DriverModel) Create(module *model.Module) error {
+	return m.create(module.ID, module)
 }
 
 func (m *DriverModel) GetConfig(driverID string) (*string, error) {

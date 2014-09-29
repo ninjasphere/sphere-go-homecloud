@@ -94,36 +94,38 @@ func startManagingDrivers() {
 
 	conn.Subscribe("$node/:node/driver/:driver/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
 
-		log.Infof("Got driver announcement node:%s driver:%s announcement:%s", values["node"], values["driver"], announcement)
+		node, driver := values["node"], values["driver"]
+
+		log.Infof("Got driver announcement node:%s driver:%s announcement:%s", node, driver, announcement)
 
 		if announcement == nil {
-			log.Warningf("Nil driver announcement from node:%s driver:%s", values["node"], values["driver"])
+			log.Warningf("Nil driver announcement from node:%s driver:%s", node, driver)
 			return true
 		}
 
 		module := &model.Module{}
 		err := json.Unmarshal(*announcement, module)
 
-		module.Topic = fmt.Sprintf("$node/%s/driver/%s", values["node"], values["driver"])
+		module.Topic = fmt.Sprintf("$node/%s/driver/%s", node, driver)
 
 		if announcement == nil {
-			log.Warningf("Could not parse announcement from node:%s driver:%s error:%s", values["node"], values["driver"], err)
+			log.Warningf("Could not parse announcement from node:%s driver:%s error:%s", node, driver, err)
 			return true
 		}
 
-		err = driverModel.Save(module)
+		err = driverModel.Create(module)
 		if err != nil {
-			log.Warningf("Failed to save driver announcement for %s error:%s", values["driver"], err)
+			log.Warningf("Failed to save driver announcement for %s error:%s", driver, err)
 		}
 
 		config, err := driverModel.GetConfig(values["driver"])
 
 		if err != nil {
-			log.Warningf("Failed to retrieve config for driver %s error:%s", values["driver"], err)
+			log.Warningf("Failed to retrieve config for driver %s error:%s", driver, err)
 		} else {
-			err = startDriver(values["node"], values["driver"], config)
+			err = startDriver(node, driver, config)
 			if err != nil {
-				log.Warningf("Failed to start driver: %s error:%s", values["driver"], err)
+				log.Warningf("Failed to start driver: %s error:%s", driver, err)
 			}
 		}
 
