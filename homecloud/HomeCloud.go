@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"git.eclipse.org/gitroot/paho/org.eclipse.paho.mqtt.golang.git"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
@@ -44,16 +45,28 @@ func Start() {
 
 	//defer redisConn.Close()
 
-	thingModel = NewThingModel(redisConn)
-	deviceModel = NewDeviceModel(redisConn)
-	roomModel = NewRoomModel(redisConn)
-	driverModel = NewDriverModel(redisConn)
-
 	conn, err = ninja.Connect("sphere-go-homecloud")
 
 	if err != nil {
 		log.FatalError(err, "Failed to connect to mqtt")
 	}
+
+	thingModel = NewThingModel(redisConn)
+	conn.MustExportService(thingModel, "$home/services/ThingModel", &model.ServiceAnnouncement{
+		Schema: "/service/thing-model",
+	})
+
+	deviceModel = NewDeviceModel(redisConn)
+	conn.MustExportService(deviceModel, "$home/services/DeviceModel", &model.ServiceAnnouncement{
+		Schema: "/service/device-model",
+	})
+
+	roomModel = NewRoomModel(redisConn)
+	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
+		Schema: "/service/room-model",
+	})
+
+	driverModel = NewDriverModel(redisConn)
 
 	startManagingDrivers()
 	startManagingDevices()

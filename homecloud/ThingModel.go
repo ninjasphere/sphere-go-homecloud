@@ -6,11 +6,11 @@ import (
 )
 
 type ThingModel struct {
-	conn redis.Conn
+	baseModel
 }
 
 func NewThingModel(conn redis.Conn) *ThingModel {
-	return &ThingModel{conn}
+	return &ThingModel{baseModel{conn, "thing"}}
 }
 
 func (m *ThingModel) FetchByDeviceId(deviceId string) (*model.Thing, error) {
@@ -40,16 +40,9 @@ func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 }
 
 func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
-
-	item, err := redis.Values(m.conn.Do("HGETALL", "thing:"+id))
-
-	if err != nil {
-		return nil, err
-	}
-
 	thing := &model.Thing{}
 
-	if err := redis.ScanStruct(item, thing); err != nil {
+	if err := m.fetch(id, thing); err != nil {
 		return nil, err
 	}
 
@@ -62,4 +55,24 @@ func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 	}
 
 	return thing, nil
+}
+
+func (m *ThingModel) FetchAll() (*[]*model.Thing, error) {
+
+	ids, err := m.fetchAllIds()
+
+	if err != nil {
+		return nil, err
+	}
+
+	things := make([]*model.Thing, len(ids))
+
+	for i, id := range ids {
+		things[i], err = m.Fetch(id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &things, nil
 }

@@ -22,6 +22,10 @@ func (m *baseModel) fetch(id string, obj interface{}) error {
 	return nil
 }
 
+func (m *baseModel) fetchAllIds() ([]string, error) {
+	return redis.Strings(m.conn.Do("SMEMBERS", m.idType+"s"))
+}
+
 func (m *baseModel) create(id string, obj interface{}) error {
 
 	args := redis.Args{}
