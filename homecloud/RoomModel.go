@@ -1,6 +1,10 @@
 package homecloud
 
 import (
+	"errors"
+	"fmt"
+
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
@@ -47,6 +51,31 @@ func (m *RoomModel) FetchAll() (*[]*model.Room, error) {
 	}
 
 	return &rooms, nil
+}
+
+func (m *RoomModel) Delete(id string) error {
+
+	if id == "" {
+		return errors.New("empty room id")
+	}
+
+	m.conn.Send("MULTI")
+	m.conn.Send("SREM", "rooms", id)
+	m.conn.Send("DEL", fmt.Sprintf("room:%s", id))
+	m.conn.Send("DEL", fmt.Sprintf("room:%s:things", id))
+	r, err := m.conn.Do("EXEC")
+
+	if err != nil {
+		return err
+	}
+
+	log.Infof(spew.Sprintf("room deletion results : %v", r))
+
+	// TODO: announce deletion via MQTT
+	// publish(Ninja.topics.room.goodbye.room(roomId)
+	// publish(Ninja.topics.location.calibration.delete, {zone: roomId})
+
+	return nil
 }
 
 func (m *RoomModel) MoveThing(from *string, to *string, thing string) error {
