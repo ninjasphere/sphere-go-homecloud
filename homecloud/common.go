@@ -1,6 +1,14 @@
 package homecloud
 
-import "github.com/ninjasphere/redigo/redis"
+import (
+	"errors"
+
+	"github.com/ninjasphere/redigo/redis"
+)
+
+var (
+	RecordNotFound = errors.New("Record Not Found")
+)
 
 type baseModel struct {
 	conn   redis.Conn
@@ -13,6 +21,10 @@ func (m *baseModel) fetch(id string, obj interface{}) error {
 
 	if err != nil {
 		return err
+	}
+
+	if len(item) == 0 {
+		return RecordNotFound
 	}
 
 	if err := redis.ScanStruct(item, obj); err != nil {
