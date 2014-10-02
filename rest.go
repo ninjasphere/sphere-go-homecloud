@@ -9,22 +9,16 @@ import (
 
 // RestServer Holds stuff shared by all the rest services
 type RestServer struct {
-	redisConn redis.Conn
+	redisPool *redis.Pool
 
 	roomModel *homecloud.RoomModel
 }
 
 func NewRestServer() *RestServer {
 
-	redisConn, err := redis.Dial("tcp", ":6379")
-
-	if err != nil {
-		log.FatalError(err, "Couldn't connect to redis")
-	}
-
 	return &RestServer{
-		redisConn: redisConn,
-		roomModel: homecloud.NewRoomModel(redisConn),
+		redisPool: homecloud.RedisPool,
+		roomModel: homecloud.NewRoomModel(homecloud.RedisPool),
 	}
 }
 

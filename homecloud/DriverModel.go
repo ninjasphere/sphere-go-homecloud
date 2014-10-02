@@ -9,8 +9,8 @@ type DriverModel struct {
 	baseModel
 }
 
-func NewDriverModel(conn redis.Conn) *DriverModel {
-	return &DriverModel{baseModel{conn, "driver"}}
+func NewDriverModel(pool *redis.Pool) *DriverModel {
+	return &DriverModel{baseModel{pool, "driver"}}
 }
 
 func (m *DriverModel) Fetch(id string) (*model.Module, error) {
@@ -29,10 +29,14 @@ func (m *DriverModel) Create(module *model.Module) error {
 }
 
 func (m *DriverModel) GetConfig(driverID string) (*string, error) {
-	exists, err := redis.Bool(m.conn.Do("HEXISTS", "driver:"+driverID, "config"))
+
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	exists, err := redis.Bool(conn.Do("HEXISTS", "driver:"+driverID, "config"))
 
 	if exists {
-		item, err := m.conn.Do("HGET", "driver:"+driverID, "config")
+		item, err := conn.Do("HGET", "driver:"+driverID, "config")
 		config, err := redis.String(item, err)
 		return &config, err
 	}
@@ -41,11 +45,19 @@ func (m *DriverModel) GetConfig(driverID string) (*string, error) {
 }
 
 func (m *DriverModel) SetConfig(driverID string, config string) error {
-	_, err := m.conn.Do("HSET", "driver:"+driverID, "config", config)
+
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("HSET", "driver:"+driverID, "config", config)
 	return err
 }
 
 func (m *DriverModel) DeleteConfig(driverID string) error {
-	_, err := m.conn.Do("HDEL", "driver:"+driverID, "config")
+
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	_, err := conn.Do("HDEL", "driver:"+driverID, "config")
 	return err
 }

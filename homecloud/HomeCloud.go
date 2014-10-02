@@ -34,42 +34,60 @@ type outgoingLocationUpdate struct {
 	HasChanged bool    `json:"hasChanged"`
 }
 
+var RedisPool = &redis.Pool{
+	MaxIdle:     3,
+	IdleTimeout: 240 * time.Second,
+	Dial: func() (redis.Conn, error) {
+		c, err := redis.Dial("tcp", ":6379")
+		if err != nil {
+			return nil, err
+		}
+		/*if _, err := c.Do("AUTH", password); err != nil {
+			c.Close()
+			return nil, err
+		}*/
+		return c, err
+	},
+	TestOnBorrow: func(c redis.Conn, t time.Time) error {
+		_, err := c.Do("PING")
+		return err
+	},
+}
+
 func Start() {
-
-	redisConn, err := redis.Dial("tcp", ":6379")
-
-	if err != nil {
-		log.FatalError(err, "Couldn't connect to redis")
-	}
 
 	//defer redisConn.Close()
 
+	var err error
 	conn, err = ninja.Connect("sphere-go-homecloud")
 
 	if err != nil {
 		log.FatalError(err, "Failed to connect to mqtt")
 	}
 
-	thingModel = NewThingModel(redisConn)
+	thingModel = NewThingModel(RedisPool)
 	conn.MustExportService(thingModel, "$home/services/ThingModel", &model.ServiceAnnouncement{
 		Schema: "/service/thing-model",
 	})
 
-	deviceModel = NewDeviceModel(redisConn)
+	deviceModel = NewDeviceModel(RedisPool)
 	conn.MustExportService(deviceModel, "$home/services/DeviceModel", &model.ServiceAnnouncement{
 		Schema: "/service/device-model",
 	})
 
-	roomModel = NewRoomModel(redisConn)
+	roomModel = NewRoomModel(RedisPool)
 	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
 		Schema: "/service/room-model",
 	})
 
-	driverModel = NewDriverModel(redisConn)
+	driverModel = NewDriverModel(RedisPool)
 
 	startManagingDrivers()
 	startManagingDevices()
 	startMonitoringLocations()
+
+	//spew.Dump(thingModel.FetchAll())
+	//spew.Dump(thingModel.FetchByType("light"))
 }
 
 func startDriver(node string, driverID string, config *string) error {

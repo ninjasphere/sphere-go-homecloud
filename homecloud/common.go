@@ -11,13 +11,16 @@ var (
 )
 
 type baseModel struct {
-	conn   redis.Conn
+	pool   *redis.Pool
 	idType string
 }
 
 func (m *baseModel) fetch(id string, obj interface{}) error {
 
-	item, err := redis.Values(m.conn.Do("HGETALL", m.idType+":"+id))
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	item, err := redis.Values(conn.Do("HGETALL", m.idType+":"+id))
 
 	if err != nil {
 		return err
@@ -35,20 +38,24 @@ func (m *baseModel) fetch(id string, obj interface{}) error {
 }
 
 func (m *baseModel) fetchAllIds() ([]string, error) {
-	return redis.Strings(m.conn.Do("SMEMBERS", m.idType+"s"))
+	conn := m.pool.Get()
+	defer conn.Close()
+	return redis.Strings(conn.Do("SMEMBERS", m.idType+"s"))
 }
 
 func (m *baseModel) create(id string, obj interface{}) error {
+	conn := m.pool.Get()
+	defer conn.Close()
 
 	args := redis.Args{}
 	args = args.Add(m.idType + ":" + id)
 	args = args.AddFlat(obj)
 
-	if _, err := m.conn.Do("HMSET", args...); err != nil {
+	if _, err := conn.Do("HMSET", args...); err != nil {
 		return err
 	}
 
-	if _, err := m.conn.Do("SADD", m.idType+"s", id); err != nil {
+	if _, err := conn.Do("SADD", m.idType+"s", id); err != nil {
 		return err
 	}
 
