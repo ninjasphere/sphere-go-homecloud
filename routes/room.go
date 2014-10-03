@@ -33,7 +33,7 @@ func (lr *RoomRouter) GetAll(w http.ResponseWriter, roomModel *homecloud.RoomMod
 	log.Infof(spew.Sprintf("room: %v", rooms))
 
 	if err != nil {
-		WriteServerErrorResponse("Unable to retrieve room", http.StatusInternalServerError, w)
+		WriteServerErrorResponse("Unable to retrieve rooms", http.StatusInternalServerError, w)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (lr *RoomRouter) DeleteRoom(params martini.Params, w http.ResponseWriter, r
 	}
 
 	if err != nil {
-		WriteServerErrorResponse("Unable to retrieve room", http.StatusInternalServerError, w)
+		WriteServerErrorResponse("Unable to delete room", http.StatusInternalServerError, w)
 		return
 	}
 

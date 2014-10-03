@@ -11,14 +11,16 @@ import (
 type RestServer struct {
 	redisPool *redis.Pool
 
-	roomModel *homecloud.RoomModel
+	roomModel  *homecloud.RoomModel
+	thingModel *homecloud.ThingModel
 }
 
 func NewRestServer() *RestServer {
 
 	return &RestServer{
-		redisPool: homecloud.RedisPool,
-		roomModel: homecloud.NewRoomModel(homecloud.RedisPool),
+		redisPool:  homecloud.RedisPool,
+		roomModel:  homecloud.NewRoomModel(homecloud.RedisPool),
+		thingModel: homecloud.NewThingModel(homecloud.RedisPool),
 	}
 }
 
@@ -27,6 +29,7 @@ func (r *RestServer) Listen() {
 	m := martini.Classic()
 
 	m.Map(r.roomModel)
+	m.Map(r.thingModel)
 
 	location := routes.NewLocationRouter()
 	thing := routes.NewThingRouter()

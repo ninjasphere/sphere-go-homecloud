@@ -35,3 +35,12 @@ func WriteServerResponse(data interface{}, code int, w http.ResponseWriter) {
 		log.Errorf("Unable to serialise response: %s", err)
 	}
 }
+
+func GetJsonPayload(r *http.Request) (map[string]interface{}, error) {
+
+	var f interface{}
+
+	err := json.NewDecoder(r.Body).Decode(&f)
+
+	return f.(map[string]interface{}), err
+}
