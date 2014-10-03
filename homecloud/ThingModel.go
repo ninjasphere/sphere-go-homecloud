@@ -1,10 +1,12 @@
 package homecloud
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -108,4 +110,49 @@ func (m *ThingModel) FetchAll() (*[]*model.Thing, error) {
 	}
 
 	return &things, nil
+}
+
+func (m *ThingModel) Delete(id string) error {
+
+	if id == "" {
+		return errors.New("empty thing id")
+	}
+
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	conn.Send("MULTI")
+	conn.Send("SREM", "things", id)
+	conn.Send("DEL", fmt.Sprintf("thing:%s", id))
+	r, err := conn.Do("EXEC")
+
+	if err != nil {
+		return err
+	}
+
+	log.Infof(spew.Sprintf("thing deletion results : %v", r))
+
+	// TODO: announce deletion via MQTT
+	// self.bus.publish(Ninja.topics.thing.goodbye.thing(thing.id), {id: thing.id});
+
+	return nil
+}
+
+// Update a thing, this is currently very optimisic and only changes name and type fields.
+func (m *ThingModel) Update(id string, thing *model.Thing) error {
+
+	oldThing := &model.Thing{}
+
+	if err := m.fetch(id, thing); err != nil {
+		return fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
+	}
+
+	oldThing.Name = thing.Name
+	oldThing.Type = thing.Type
+
+	if err := m.update(id, oldThing); err != nil {
+		return fmt.Errorf("Failed to update thing (id:%s): %s", id, err)
+	}
+
+	return nil
 }

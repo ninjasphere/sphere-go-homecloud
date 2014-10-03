@@ -104,3 +104,18 @@ func (m *baseModel) isUnchanged(a interface{}, b interface{}) bool {
 
 	return true
 }
+
+func (m *baseModel) update(id string, obj interface{}) error {
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	args := redis.Args{}
+	args = args.Add(m.idType + ":" + id)
+	args = args.AddFlat(obj)
+
+	if _, err := conn.Do("HMSET", args...); err != nil {
+		return err
+	}
+
+	return nil
+}
