@@ -2,6 +2,7 @@ package homecloud
 
 import (
 	"reflect"
+	"sort"
 
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
@@ -71,7 +72,7 @@ func (m *DeviceModel) FetchAll() (*[]*model.Device, error) {
 }
 
 func (m *DeviceModel) Create(device *model.Device) error {
-	log.Infof("Saving device")
+	log.Debugf("Saving device")
 
 	existing, err := m.Fetch(device.ID)
 
@@ -79,7 +80,14 @@ func (m *DeviceModel) Create(device *model.Device) error {
 		return err
 	}
 
-	err = m.save(device.ID, device)
+	if existing != nil {
+		// This relationship can not be changed here.
+		device.Thing = existing.Thing
+	}
+
+	updated, err := m.save(device.ID, device)
+
+	log.Debugf("Device was updated? %t", updated)
 
 	if err != nil || existing != nil {
 		return err
@@ -92,6 +100,8 @@ func (m *DeviceModel) Create(device *model.Device) error {
 	if err != nil && err != RecordNotFound {
 		return nil
 	}
+
+	log.Debugf("New device has no thing. Creating one")
 
 	thing = &model.Thing{
 		DeviceID: &device.ID,
@@ -122,11 +132,25 @@ func (m *DeviceModel) Create(device *model.Device) error {
 
 	device.Thing = &thing.ID
 
-	return m.save(device.ID, device)
+	_, err = m.save(device.ID, device)
+	return err
 }
 
 func (m *DeviceModel) AddChannel(channel *model.Channel) error {
-	return m.channelModel.saveWithRoot("device:"+channel.Device.ID+":channel", channel.ID, channel)
+
+	// First.. make sure the string arrays are sorted :/
+	sort.Strings(*channel.SupportedMethods)
+	sort.Strings(*channel.SupportedEvents)
+
+	updated, err := m.channelModel.saveWithRoot("device:"+channel.Device.ID+":channel", channel.ID, channel)
+	if err != nil {
+		return err
+	}
+	log.Debugf("Channel was updated? %t", updated)
+	if updated {
+		return m.markUpdated("device", channel.Device.ID)
+	}
+	return nil
 }
 
 func (m *baseModel) getChannel(deviceID, channelID string) (*model.Channel, error) {

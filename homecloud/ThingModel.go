@@ -24,7 +24,8 @@ func (m *ThingModel) Create(thing *model.Thing) error {
 		thing.ID = uuid.NewUUID().String()
 	}
 
-	return m.save(thing.ID, thing)
+	_, err := m.save(thing.ID, thing)
+	return err
 }
 
 func (m *ThingModel) FetchByDeviceId(deviceId string) (*model.Thing, error) {
@@ -150,7 +151,7 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 	oldThing.Name = thing.Name
 	oldThing.Type = thing.Type
 
-	if err := m.save(id, oldThing); err != nil {
+	if _, err := m.save(id, oldThing); err != nil {
 		return fmt.Errorf("Failed to update thing (id:%s): %s", id, err)
 	}
 

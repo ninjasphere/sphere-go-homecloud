@@ -27,7 +27,8 @@ func (m *DriverModel) Fetch(id string) (*model.Module, error) {
 }
 
 func (m *DriverModel) Create(module *model.Module) error {
-	return m.save(module.ID, module)
+	_, err := m.save(module.ID, module)
+	return err
 }
 
 func (m *DriverModel) GetConfig(driverID string) (*string, error) {

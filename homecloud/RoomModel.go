@@ -27,7 +27,8 @@ func (m *RoomModel) Create(room *model.Room) error {
 		room.ID = uuid.NewUUID().String()
 	}
 
-	return m.save(room.ID, room)
+	_, err := m.save(room.ID, room)
+	return err
 }
 
 func (m *RoomModel) Fetch(id string) (*model.Room, error) {
