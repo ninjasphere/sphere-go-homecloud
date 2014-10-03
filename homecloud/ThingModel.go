@@ -150,7 +150,7 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 	oldThing.Name = thing.Name
 	oldThing.Type = thing.Type
 
-	if err := m.update(id, oldThing); err != nil {
+	if err := m.save(id, oldThing); err != nil {
 		return fmt.Errorf("Failed to update thing (id:%s): %s", id, err)
 	}
 
