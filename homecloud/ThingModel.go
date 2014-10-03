@@ -81,7 +81,7 @@ func (m *ThingModel) FetchByType(thingType string) (*[]*model.Thing, error) {
 		return nil, err
 	}
 
-	var filtered []*model.Thing
+	filtered := []*model.Thing{}
 
 	for _, thing := range *allThings {
 		if thing.Type == thingType {
