@@ -3,6 +3,7 @@ package homecloud
 import (
 	"errors"
 	"fmt"
+	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
 
@@ -18,7 +19,7 @@ type RoomModel struct {
 }
 
 func NewRoomModel(pool *redis.Pool) *RoomModel {
-	return &RoomModel{baseModel{pool, "room"}, logger.GetLogger("RoomModel")}
+	return &RoomModel{baseModel{pool, "room", reflect.TypeOf(model.Thing{})}, logger.GetLogger("RoomModel")}
 }
 
 func (m *RoomModel) Create(room *model.Room) error {
@@ -26,7 +27,7 @@ func (m *RoomModel) Create(room *model.Room) error {
 		room.ID = uuid.NewUUID().String()
 	}
 
-	return m.create(room.ID, room)
+	return m.save(room.ID, room)
 }
 
 func (m *RoomModel) Fetch(id string) (*model.Room, error) {

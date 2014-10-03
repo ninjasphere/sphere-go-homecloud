@@ -1,17 +1,21 @@
 package homecloud
 
 import (
+	"reflect"
+
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
 
 type DeviceModel struct {
 	baseModel
+	channelModel baseModel
 }
 
 func NewDeviceModel(pool *redis.Pool) *DeviceModel {
 	return &DeviceModel{
-		baseModel{pool, "device"},
+		baseModel{pool, "device", reflect.TypeOf(model.Device{})},
+		baseModel{pool, "channel", reflect.TypeOf(model.Channel{})},
 	}
 }
 
@@ -75,7 +79,7 @@ func (m *DeviceModel) Create(device *model.Device) error {
 		return err
 	}
 
-	err = m.create(device.ID, device)
+	err = m.save(device.ID, device)
 
 	if err != nil || existing != nil {
 		return err
@@ -118,27 +122,11 @@ func (m *DeviceModel) Create(device *model.Device) error {
 
 	device.Thing = &thing.ID
 
-	return m.create(device.ID, device)
+	return m.save(device.ID, device)
 }
 
 func (m *DeviceModel) AddChannel(channel *model.Channel) error {
-
-	conn := m.pool.Get()
-	defer conn.Close()
-
-	args := redis.Args{}
-	args = args.Add("device:" + channel.Device.ID + ":channel:" + channel.ID)
-	args = args.AddFlat(channel)
-
-	if _, err := conn.Do("HMSET", args...); err != nil {
-		return err
-	}
-
-	if _, err := conn.Do("SADD", "device:"+channel.Device.ID+":channels", channel.ID); err != nil {
-		return err
-	}
-
-	return nil
+	return m.channelModel.saveWithRoot("device:"+channel.Device.ID+":channel", channel.ID, channel)
 }
 
 func (m *baseModel) getChannel(deviceID, channelID string) (*model.Channel, error) {

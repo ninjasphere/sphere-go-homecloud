@@ -1,6 +1,8 @@
 package homecloud
 
 import (
+	"reflect"
+
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -10,7 +12,7 @@ type DriverModel struct {
 }
 
 func NewDriverModel(pool *redis.Pool) *DriverModel {
-	return &DriverModel{baseModel{pool, "driver"}}
+	return &DriverModel{baseModel{pool, "driver", reflect.TypeOf(model.Module{})}}
 }
 
 func (m *DriverModel) Fetch(id string) (*model.Module, error) {
@@ -25,7 +27,7 @@ func (m *DriverModel) Fetch(id string) (*model.Module, error) {
 }
 
 func (m *DriverModel) Create(module *model.Module) error {
-	return m.create(module.ID, module)
+	return m.save(module.ID, module)
 }
 
 func (m *DriverModel) GetConfig(driverID string) (*string, error) {

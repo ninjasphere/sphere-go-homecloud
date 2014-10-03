@@ -2,6 +2,7 @@ package homecloud
 
 import (
 	"fmt"
+	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/ninjasphere/go-ninja/model"
@@ -13,7 +14,7 @@ type ThingModel struct {
 }
 
 func NewThingModel(pool *redis.Pool) *ThingModel {
-	return &ThingModel{baseModel{pool, "thing"}}
+	return &ThingModel{baseModel{pool, "thing", reflect.TypeOf(model.Thing{})}}
 }
 
 func (m *ThingModel) Create(thing *model.Thing) error {
@@ -21,7 +22,7 @@ func (m *ThingModel) Create(thing *model.Thing) error {
 		thing.ID = uuid.NewUUID().String()
 	}
 
-	return m.create(thing.ID, thing)
+	return m.save(thing.ID, thing)
 }
 
 func (m *ThingModel) FetchByDeviceId(deviceId string) (*model.Thing, error) {
