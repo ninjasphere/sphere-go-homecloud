@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
 )
@@ -12,11 +13,16 @@ var log = logger.GetLogger("HomeCloud")
 
 func main() {
 
-	homecloud.Start()
+	conn, err := ninja.Connect("sphere-go-homecloud")
+	if err != nil {
+		log.Fatalf("Failed to connect to sphere: %s", err)
+	}
+
+	homecloud.Start(conn)
 
 	log.Infof("hello")
 
-	restServer := NewRestServer() // TODO: Should we reuse the persistance layer from homecloud?
+	restServer := NewRestServer(conn) // TODO: Should we reuse the persistance layer from homecloud?
 
 	go restServer.Listen()
 

@@ -8,6 +8,7 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
@@ -18,8 +19,8 @@ type RoomModel struct {
 	log *logger.Logger
 }
 
-func NewRoomModel(pool *redis.Pool) *RoomModel {
-	return &RoomModel{baseModel{pool, "room", reflect.TypeOf(model.Thing{})}, logger.GetLogger("RoomModel")}
+func NewRoomModel(pool *redis.Pool, conn *ninja.Connection) *RoomModel {
+	return &RoomModel{baseModel{pool, "room", reflect.TypeOf(model.Thing{}), conn}, logger.GetLogger("RoomModel")}
 }
 
 func (m *RoomModel) Create(room *model.Room) error {

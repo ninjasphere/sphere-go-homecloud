@@ -2,10 +2,12 @@ package homecloud
 
 import (
 	"errors"
+	"fmt"
 	"reflect"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/redigo/redis"
 )
 
@@ -18,6 +20,7 @@ type baseModel struct {
 	pool    *redis.Pool
 	idType  string
 	objType reflect.Type
+	conn    *ninja.Connection
 }
 
 func (m *baseModel) fetch(id string, obj interface{}) error {
@@ -98,6 +101,12 @@ func (m *baseModel) markUpdated(idRoot, id string) error {
 	return err
 }
 
+func (m *baseModel) getLastUpdated(idRoot, id string) (int64, error) {
+	conn := m.pool.Get()
+	defer conn.Close()
+	return redis.Int64(conn.Do("HGET", idRoot+":updated", id))
+}
+
 func (m *baseModel) isUnchanged(a interface{}, b interface{}) bool {
 
 	spew.Dump("Comparing", a, b)
@@ -120,11 +129,94 @@ func (m *baseModel) isUnchanged(a interface{}, b interface{}) bool {
 	return true
 }
 
+/*
+The manifest needs to be sent via rpc
+conn.GetServiceClient("$ninja/services/rpc/modelstore").call("calculate_sync_items", manifest, &whateverTheReplyIs, time.Second * 20) )
+*/
+
+// mosquitto_pub -m '{"id":123, "params": ["device",{}],"jsonrpc": "2.0","method":"modelstore.calculate_sync_items","time":132123123}' -t '$ninja/services/rpc/modelstore/calculate_sync_items'
+
+type SyncDifferenceList struct {
+	Model         string       `json:"model"`
+	CloudRequires SyncManifest `json:"cloud_requires"`
+	NodeRequires  SyncManifest `json:"node_requires"`
+}
+
+type SyncManifest map[string]int64
+
+type SyncDataSet map[string]interface{}
+
+type SyncObject struct {
+	Data         json.RawValue `json:"data"`
+	LastModified int64         `json:"last_modified"`
+}
+
+type SyncReply struct {
+	Model            string      `json:"model"`
+	RequestedObjects SyncDataSet `json:"requestedObjects"`
+	PushedObjects    SyncDataSet `json:"pushedObjects"`
+}
+
+func (m *baseModel) sync() error {
+
+	var diffList SyncDifferenceList
+
+	manifest, err := m.getSyncManifest()
+	if err != nil {
+		return err
+	}
+
+	calcClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
+	err = calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, time.Second*20)
+
+	spew.Dump("modelstore.calculate_sync_items REPLY", err, diffList)
+
+	if err != nil {
+		return fmt.Errorf("Failed calling calculate_sync_items for model %s error:%s", m.idType, err)
+	}
+
+	var requestIds []string
+	for id := range diffList.NodeRequires {
+		requestIds = append(requestIds, id)
+	}
+
+	requestedData := SyncDataSet{}
+
+	for id := range diffList.CloudRequires {
+		obj := reflect.New(m.objType)
+		err = m.fetch(id, obj)
+		if err != nil {
+			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)
+		}
+
+		lastUpdated, err := m.getLastUpdated(m.idType, id)
+		if err != nil {
+			return fmt.Errorf("Failed retrieving last updated time for requested %s id:%s error:%s", m.idType, id, err)
+		}
+
+		requestedData[id] = SyncObject{obj, lastUpdated}
+	}
+
+	syncClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
+
+	var syncReply SyncReply
+
+	err = syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, time.Second*20)
+
+	spew.Dump("modelstore.do_sync_items REPLY", err, syncReply)
+
+	if err != nil {
+		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)
+	}
+
+	return err
+}
+
 func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	var manifest SyncManifest = make(map[string]time.Time)
+	var manifest SyncManifest = make(map[string]int64)
 
 	item, err := redis.Strings(conn.Do("HGETALL", m.idType+":updated"))
 
@@ -134,7 +226,7 @@ func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
 		if err != nil {
 			return nil, err
 		}
-		manifest[item[i]] = t
+		manifest[item[i]] = t.UnixNano() / int64(time.Millisecond)
 	}
 
 	if err != nil {

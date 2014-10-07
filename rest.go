@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-martini/martini"
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
 	"github.com/ninjasphere/sphere-go-homecloud/routes"
@@ -15,12 +16,12 @@ type RestServer struct {
 	thingModel *homecloud.ThingModel
 }
 
-func NewRestServer() *RestServer {
+func NewRestServer(conn *ninja.Connection) *RestServer {
 
 	return &RestServer{
 		redisPool:  homecloud.RedisPool,
-		roomModel:  homecloud.NewRoomModel(homecloud.RedisPool),
-		thingModel: homecloud.NewThingModel(homecloud.RedisPool),
+		roomModel:  homecloud.NewRoomModel(homecloud.RedisPool, conn),
+		thingModel: homecloud.NewThingModel(homecloud.RedisPool, conn),
 	}
 }
 

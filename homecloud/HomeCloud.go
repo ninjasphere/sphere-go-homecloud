@@ -54,33 +54,27 @@ var RedisPool = &redis.Pool{
 	},
 }
 
-func Start() {
+func Start(c *ninja.Connection) {
 
-	//defer redisConn.Close()
+	//FIXME
+	conn = c
 
-	var err error
-	conn, err = ninja.Connect("sphere-go-homecloud")
-
-	if err != nil {
-		log.FatalError(err, "Failed to connect to mqtt")
-	}
-
-	thingModel = NewThingModel(RedisPool)
+	thingModel = NewThingModel(RedisPool, conn)
 	conn.MustExportService(thingModel, "$home/services/ThingModel", &model.ServiceAnnouncement{
 		Schema: "/service/thing-model",
 	})
 
-	deviceModel = NewDeviceModel(RedisPool)
+	deviceModel = NewDeviceModel(RedisPool, conn)
 	conn.MustExportService(deviceModel, "$home/services/DeviceModel", &model.ServiceAnnouncement{
 		Schema: "/service/device-model",
 	})
 
-	roomModel = NewRoomModel(RedisPool)
+	roomModel = NewRoomModel(RedisPool, conn)
 	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
 		Schema: "/service/room-model",
 	})
 
-	driverModel = NewDriverModel(RedisPool)
+	driverModel = NewDriverModel(RedisPool, conn)
 
 	startManagingDrivers()
 	startManagingDevices()

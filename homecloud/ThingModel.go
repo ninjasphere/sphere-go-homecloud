@@ -7,6 +7,7 @@ import (
 
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -15,8 +16,8 @@ type ThingModel struct {
 	baseModel
 }
 
-func NewThingModel(pool *redis.Pool) *ThingModel {
-	return &ThingModel{baseModel{pool, "thing", reflect.TypeOf(model.Thing{})}}
+func NewThingModel(pool *redis.Pool, conn *ninja.Connection) *ThingModel {
+	return &ThingModel{baseModel{pool, "thing", reflect.TypeOf(model.Thing{}), conn}}
 }
 
 func (m *ThingModel) Create(thing *model.Thing) error {

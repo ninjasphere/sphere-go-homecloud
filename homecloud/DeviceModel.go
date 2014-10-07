@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"sort"
 
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -13,11 +14,20 @@ type DeviceModel struct {
 	channelModel baseModel
 }
 
-func NewDeviceModel(pool *redis.Pool) *DeviceModel {
-	return &DeviceModel{
-		baseModel{pool, "device", reflect.TypeOf(model.Device{})},
-		baseModel{pool, "channel", reflect.TypeOf(model.Channel{})},
+func NewDeviceModel(pool *redis.Pool, conn *ninja.Connection) *DeviceModel {
+	m := &DeviceModel{
+		baseModel{pool, "device", reflect.TypeOf(model.Device{}), conn},
+		baseModel{pool, "channel", reflect.TypeOf(model.Channel{}), conn},
 	}
+
+	/*manifest, err := m.getSyncManifest()
+
+	spew.Dump(err)
+	spew.Dump(json.Marshal(manifest))
+
+	spew.Dump("SYNC ERR", m.sync())*/
+
+	return m
 }
 
 func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
