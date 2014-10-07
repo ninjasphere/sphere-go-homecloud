@@ -74,6 +74,15 @@ func Start(c *ninja.Connection) {
 		Schema: "/service/room-model",
 	})
 
+	//roomModel.ClearCloud()
+	roomModel.MustSync()
+
+	//deviceModel.ClearCloud()
+	deviceModel.MustSync()
+
+	//thingModel.ClearCloud()
+	thingModel.MustSync()
+
 	driverModel = NewDriverModel(RedisPool, conn)
 
 	startManagingDrivers()

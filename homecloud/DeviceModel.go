@@ -3,6 +3,7 @@ package homecloud
 import (
 	"reflect"
 	"sort"
+	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/model"
@@ -15,19 +16,10 @@ type DeviceModel struct {
 }
 
 func NewDeviceModel(pool *redis.Pool, conn *ninja.Connection) *DeviceModel {
-	m := &DeviceModel{
+	return &DeviceModel{
 		baseModel{pool, "device", reflect.TypeOf(model.Device{}), conn},
 		baseModel{pool, "channel", reflect.TypeOf(model.Channel{}), conn},
 	}
-
-	/*manifest, err := m.getSyncManifest()
-
-	spew.Dump(err)
-	spew.Dump(json.Marshal(manifest))
-
-	spew.Dump("SYNC ERR", m.sync())*/
-
-	return m
 }
 
 func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
@@ -158,7 +150,7 @@ func (m *DeviceModel) AddChannel(channel *model.Channel) error {
 	}
 	log.Debugf("Channel was updated? %t", updated)
 	if updated {
-		return m.markUpdated("device", channel.Device.ID)
+		return m.markUpdated("device", channel.Device.ID, time.Now())
 	}
 	return nil
 }

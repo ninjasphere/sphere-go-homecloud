@@ -1,12 +1,12 @@
 package homecloud
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -60,7 +60,6 @@ func (m *baseModel) save(id string, obj interface{}) (updated bool, err error) {
 }
 
 func (m *baseModel) saveWithRoot(idRoot, id string, obj interface{}) (bool, error) {
-	log.Debugf("saveWithRoot", spew.Sdump(idRoot, id, obj))
 	conn := m.pool.Get()
 	defer conn.Close()
 
@@ -90,26 +89,35 @@ func (m *baseModel) saveWithRoot(idRoot, id string, obj interface{}) (bool, erro
 		return false, err
 	}
 
-	return true, m.markUpdated(idRoot, id)
+	return true, m.markUpdated(idRoot, id, time.Now())
 }
 
-func (m *baseModel) markUpdated(idRoot, id string) error {
+func (m *baseModel) markUpdated(idRoot, id string, t time.Time) error {
 	conn := m.pool.Get()
 	defer conn.Close()
-	t, _ := time.Now().MarshalText()
-	_, err := conn.Do("HSET", idRoot+":updated", id, t)
+	ts, err := t.MarshalText()
+	if err != nil {
+		return err
+	}
+	_, err = conn.Do("HSET", idRoot+":updated", id, ts)
 	return err
 }
 
-func (m *baseModel) getLastUpdated(idRoot, id string) (int64, error) {
+func (m *baseModel) getLastUpdated(idRoot, id string) (*time.Time, error) {
 	conn := m.pool.Get()
 	defer conn.Close()
-	return redis.Int64(conn.Do("HGET", idRoot+":updated", id))
+	timeString, err := redis.String(conn.Do("HGET", idRoot+":updated", id))
+
+	if err != nil || timeString == "" {
+		return nil, err
+	}
+
+	t := time.Time{}
+	err = t.UnmarshalText([]byte(timeString))
+	return &t, err
 }
 
 func (m *baseModel) isUnchanged(a interface{}, b interface{}) bool {
-
-	spew.Dump("Comparing", a, b)
 
 	aFlat, bFlat := redis.Args{}.AddFlat(a), redis.Args{}.AddFlat(b)
 
@@ -151,13 +159,26 @@ type SyncObject struct {
 	LastModified int64       `json:"last_modified"`
 }
 
-type SyncReply struct {
-	Model            string      `json:"model"`
-	RequestedObjects SyncDataSet `json:"requestedObjects"`
-	PushedObjects    SyncDataSet `json:"pushedObjects"`
+type SyncRawObject struct {
+	Data         json.RawMessage `json:"data"`
+	LastModified int64           `json:"last_modified"`
 }
 
-func (m *baseModel) sync() error {
+type SyncReply struct {
+	Model            string                   `json:"model"`
+	RequestedObjects map[string]SyncRawObject `json:"requestedObjects"`
+	PushedObjects    SyncDataSet              `json:"pushedObjects"`
+}
+
+func (m *baseModel) MustSync() {
+	if err := m.Sync(); err != nil {
+		log.Fatalf("Failed to sync %s s error:%s", m.idType, err)
+	}
+}
+
+func (m *baseModel) Sync() error {
+
+	log.Infof("Syncing %ss", m.idType)
 
 	var diffList SyncDifferenceList
 
@@ -169,13 +190,11 @@ func (m *baseModel) sync() error {
 	calcClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
 	err = calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, time.Second*20)
 
-	spew.Dump("modelstore.calculate_sync_items REPLY", err, diffList)
-
 	if err != nil {
 		return fmt.Errorf("Failed calling calculate_sync_items for model %s error:%s", m.idType, err)
 	}
 
-	var requestIds []string
+	requestIds := make([]string, 0)
 	for id := range diffList.NodeRequires {
 		requestIds = append(requestIds, id)
 	}
@@ -183,8 +202,9 @@ func (m *baseModel) sync() error {
 	requestedData := SyncDataSet{}
 
 	for id := range diffList.CloudRequires {
-		obj := reflect.New(m.objType)
+		obj := reflect.New(m.objType).Interface()
 		err = m.fetch(id, obj)
+
 		if err != nil {
 			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)
 		}
@@ -194,7 +214,7 @@ func (m *baseModel) sync() error {
 			return fmt.Errorf("Failed retrieving last updated time for requested %s id:%s error:%s", m.idType, id, err)
 		}
 
-		requestedData[id] = SyncObject{obj, lastUpdated}
+		requestedData[id] = SyncObject{obj, lastUpdated.UnixNano() / int64(time.Millisecond)}
 	}
 
 	syncClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
@@ -203,13 +223,68 @@ func (m *baseModel) sync() error {
 
 	err = syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, time.Second*20)
 
-	spew.Dump("modelstore.do_sync_items REPLY", err, syncReply)
+	if err != nil {
+		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)
+	}
+
+	for id, requestedObj := range syncReply.RequestedObjects {
+		obj := reflect.New(m.objType).Interface()
+		err := json.Unmarshal(requestedObj.Data, obj)
+		if err != nil {
+			return fmt.Errorf("Failed to unmarshal requested %s id:%s error: %s", m.idType, id, err)
+		}
+
+		updated, err := m.save(id, obj)
+		if !updated {
+			log.Warningf("We requested an updated %s id:%s but it was the same as what we had.", m.idType, id)
+		}
+
+		if err != nil {
+			return fmt.Errorf("Failed to save requested %s id:%s error: %s", m.idType, id, err)
+		}
+
+		err = m.markUpdated(m.idType, id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)))
+		if err != nil {
+			return fmt.Errorf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
+		}
+	}
+
+	return err
+}
+
+// ClearCloud removes everything from the cloud's version of this model
+func (m *baseModel) ClearCloud() error {
+
+	log.Infof("Clearing cloud of %ss", m.idType)
+
+	var diffList SyncDifferenceList
+
+	manifest := make(map[string]int64)
+
+	calcClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
+	err := calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, time.Second*20)
+
+	if err != nil {
+		return fmt.Errorf("Failed calling calculate_sync_items for model %s error:%s", m.idType, err)
+	}
+
+	requestedData := SyncDataSet{}
+	requestIds := make([]string, 0)
+	for id := range diffList.NodeRequires {
+		requestedData[id] = SyncObject{nil, time.Now().UnixNano() / int64(time.Millisecond)}
+	}
+
+	syncClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
+
+	var syncReply SyncReply
+
+	err = syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, time.Second*20)
 
 	if err != nil {
 		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)
 	}
 
-	return err
+	return nil
 }
 
 func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
@@ -232,10 +307,6 @@ func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	/*if err := redis.ScanStruct(item, manifest); err != nil {
-		return nil, err
-	}*/
 
 	return &manifest, nil
 }
