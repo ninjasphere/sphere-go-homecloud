@@ -19,7 +19,8 @@ func NewThingRouter() *ThingRouter {
 }
 
 func (lr *ThingRouter) Register(r martini.Router) {
-	r.Get("/", lr.GetAll)
+
+	r.Get("", lr.GetAll)
 	r.Get("/:id", lr.GetThing)
 	r.Put("/:id", lr.PutThing)
 	r.Put("/:id/location", lr.PutThingLocation)
@@ -27,6 +28,7 @@ func (lr *ThingRouter) Register(r martini.Router) {
 
 }
 
+// GetAll retrieves a list of all things
 func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel *homecloud.ThingModel) {
 	// if type is specified as a query param
 	qs := r.URL.Query()
@@ -48,6 +50,7 @@ func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel
 	WriteServerResponse(things, http.StatusOK, w)
 }
 
+// GetAll retrieves a thing using it's identifier
 func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, thingModel *homecloud.ThingModel) {
 
 	thing, err := thingModel.Fetch(params["id"])
@@ -67,6 +70,7 @@ func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, th
 	WriteServerResponse(thing, http.StatusOK, w)
 }
 
+// GetAll updates a thing using it's identifier, with the JSON payload containing name and type
 func (lr *ThingRouter) PutThing(params martini.Params, r *http.Request, w http.ResponseWriter, thingModel *homecloud.ThingModel) {
 
 	var thing *model.Thing
@@ -88,6 +92,7 @@ func (lr *ThingRouter) PutThing(params martini.Params, r *http.Request, w http.R
 	w.WriteHeader(http.StatusOK)
 }
 
+// PutThingLocation assigns or clears the location for a thing, this is currently a room identifier sent in the payload
 func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, w http.ResponseWriter, thingModel *homecloud.ThingModel) {
 
 	thing, err := thingModel.Fetch(params["id"])
@@ -129,6 +134,7 @@ func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, 
 	w.WriteHeader(http.StatusOK)
 }
 
+// DeleteThing removes a thing using it's identifier
 func (lr *ThingRouter) DeleteThing(params martini.Params, w http.ResponseWriter, thingModel *homecloud.ThingModel) {
 
 	err := thingModel.Delete(params["id"])

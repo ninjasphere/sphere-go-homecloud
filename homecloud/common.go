@@ -147,8 +147,8 @@ type SyncManifest map[string]int64
 type SyncDataSet map[string]interface{}
 
 type SyncObject struct {
-	Data         json.RawValue `json:"data"`
-	LastModified int64         `json:"last_modified"`
+	Data         interface{} `json:"data"`
+	LastModified int64       `json:"last_modified"`
 }
 
 type SyncReply struct {
