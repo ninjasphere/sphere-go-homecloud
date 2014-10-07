@@ -1,7 +1,10 @@
 package main
 
 import (
+	"net/http"
+
 	"github.com/go-martini/martini"
+	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
 	"github.com/ninjasphere/sphere-go-homecloud/routes"
@@ -10,17 +13,27 @@ import (
 // RestServer Holds stuff shared by all the rest services
 type RestServer struct {
 	redisPool *redis.Pool
+	conn      *ninja.Connection
 
-	roomModel  *homecloud.RoomModel
-	thingModel *homecloud.ThingModel
+	roomModel   *homecloud.RoomModel
+	thingModel  *homecloud.ThingModel
+	deviceModel *homecloud.DeviceModel
 }
 
 func NewRestServer() *RestServer {
 
+	conn, err := ninja.Connect("sphere-go-homecloud-rest")
+
+	if err != nil {
+		log.FatalError(err, "Failed to connect to mqtt")
+	}
+
 	return &RestServer{
-		redisPool:  homecloud.RedisPool,
-		roomModel:  homecloud.NewRoomModel(homecloud.RedisPool),
-		thingModel: homecloud.NewThingModel(homecloud.RedisPool),
+		redisPool:   homecloud.RedisPool,
+		conn:        conn,
+		roomModel:   homecloud.NewRoomModel(homecloud.RedisPool),
+		thingModel:  homecloud.NewThingModel(homecloud.RedisPool),
+		deviceModel: homecloud.NewDeviceModel(homecloud.RedisPool),
 	}
 }
 
@@ -30,18 +43,18 @@ func (r *RestServer) Listen() {
 
 	m.Map(r.roomModel)
 	m.Map(r.thingModel)
+	m.Map(r.deviceModel)
+	m.Map(r.conn)
 
 	location := routes.NewLocationRouter()
 	thing := routes.NewThingRouter()
 	room := routes.NewRoomRouter()
-	app := routes.NewAppRouter()
 
-	m.Group("/rest/v1/locations", location.Register)
-	m.Group("/rest/v1/things", thing.Register)
-	m.Group("/rest/v1/rooms", room.Register)
-	m.Group("/rest/v1/apps", app.Register)
+	m.Group("/rest/v1/location", location.Register)
+	m.Group("/rest/v1/thing", thing.Register)
+	m.Group("/rest/v1/room", room.Register)
 
-	m.Run()
+	http.ListenAndServe(":8000", m)
 }
 
 func (r *RestServer) getStuff() string {
