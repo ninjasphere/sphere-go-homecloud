@@ -8,6 +8,7 @@ import (
 	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
 	"github.com/ninjasphere/sphere-go-homecloud/routes"
+	"github.com/ninjasphere/sphere-go-homecloud/state"
 )
 
 // RestServer Holds stuff shared by all the rest services
@@ -15,9 +16,10 @@ type RestServer struct {
 	redisPool *redis.Pool
 	conn      *ninja.Connection
 
-	roomModel   *homecloud.RoomModel
-	thingModel  *homecloud.ThingModel
-	deviceModel *homecloud.DeviceModel
+	roomModel    *homecloud.RoomModel
+	thingModel   *homecloud.ThingModel
+	deviceModel  *homecloud.DeviceModel
+	stateManager state.StateManager
 }
 
 func NewRestServer(conn *ninja.Connection) *RestServer {
@@ -29,11 +31,12 @@ func NewRestServer(conn *ninja.Connection) *RestServer {
 	}
 
 	return &RestServer{
-		redisPool:   homecloud.RedisPool,
-		conn:        conn,
-		roomModel:   homecloud.NewRoomModel(homecloud.RedisPool, conn),
-		thingModel:  homecloud.NewThingModel(homecloud.RedisPool, conn),
-		deviceModel: homecloud.NewDeviceModel(homecloud.RedisPool, conn),
+		redisPool:    homecloud.RedisPool,
+		conn:         conn,
+		roomModel:    homecloud.NewRoomModel(homecloud.RedisPool, conn),
+		thingModel:   homecloud.NewThingModel(homecloud.RedisPool, conn),
+		deviceModel:  homecloud.NewDeviceModel(homecloud.RedisPool, conn),
+		stateManager: state.NewStateManager(conn),
 	}
 }
 
@@ -45,6 +48,7 @@ func (r *RestServer) Listen() {
 	m.Map(r.thingModel)
 	m.Map(r.deviceModel)
 	m.Map(r.conn)
+	m.Map(r.stateManager)
 
 	location := routes.NewLocationRouter()
 	thing := routes.NewThingRouter()
@@ -55,8 +59,4 @@ func (r *RestServer) Listen() {
 	m.Group("/rest/v1/rooms", room.Register)
 
 	http.ListenAndServe(":8000", m)
-}
-
-func (r *RestServer) getStuff() string {
-	return "Hello world!"
 }
