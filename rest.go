@@ -50,9 +50,9 @@ func (r *RestServer) Listen() {
 	thing := routes.NewThingRouter()
 	room := routes.NewRoomRouter()
 
-	m.Group("/rest/v1/location", location.Register)
-	m.Group("/rest/v1/thing", thing.Register)
-	m.Group("/rest/v1/room", room.Register)
+	m.Group("/rest/v1/locations", location.Register)
+	m.Group("/rest/v1/things", thing.Register)
+	m.Group("/rest/v1/rooms", room.Register)
 
 	http.ListenAndServe(":8000", m)
 }
