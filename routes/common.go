@@ -9,7 +9,7 @@ import (
 	"github.com/ninjasphere/go-ninja/logger"
 )
 
-var wrapped = false
+var wrapped = true
 var log = logger.GetLogger("HomeCloud.Router")
 
 // doesn't change so we cache it.
