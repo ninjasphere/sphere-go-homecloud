@@ -1,24 +1,28 @@
 package homecloud
 
 import (
+	"fmt"
 	"reflect"
-	"sort"
-	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
 
 type DeviceModel struct {
 	baseModel
-	channelModel baseModel
 }
 
 func NewDeviceModel(pool *redis.Pool, conn *ninja.Connection) *DeviceModel {
 	return &DeviceModel{
-		baseModel{pool, "device", reflect.TypeOf(model.Device{}), conn},
-		baseModel{pool, "channel", reflect.TypeOf(model.Channel{}), conn},
+		baseModel{pool, "device", reflect.TypeOf(model.Device{}), conn, logger.GetLogger("DeviceModel")},
+	}
+}
+
+func (m *DeviceModel) MustSync() {
+	if err := m.sync(); err != nil {
+		m.log.Fatalf("Failed to sync devices error:%s", err)
 	}
 }
 
@@ -30,32 +34,20 @@ func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
 		return nil, err
 	}
 
-	conn := m.pool.Get()
-	defer conn.Close()
-
-	channelIds, err := redis.Strings(conn.Do("SMEMBERS", "device:"+deviceID+":channels"))
+	channels, err := channelModel.FetchAll(deviceID)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to get channels for device id:%s error:%s", deviceID, err)
 	}
 
-	channels := make([]*model.Channel, len(channelIds))
-
-	for i, channelID := range channelIds {
-		channels[i], err = m.getChannel(deviceID, channelID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	device.Channels = &channels
+	device.Channels = channels
 
 	return device, nil
 }
 
 func (m *DeviceModel) FetchAll() (*[]*model.Device, error) {
 
-	ids, err := m.fetchAllIds()
+	ids, err := m.fetchIds()
 
 	if err != nil {
 		return nil, err
@@ -138,39 +130,6 @@ func (m *DeviceModel) Create(device *model.Device) error {
 	return err
 }
 
-func (m *DeviceModel) AddChannel(channel *model.Channel) error {
-
-	// First.. make sure the string arrays are sorted :/
-	sort.Strings(*channel.SupportedMethods)
-	sort.Strings(*channel.SupportedEvents)
-
-	updated, err := m.channelModel.saveWithRoot("device:"+channel.Device.ID+":channel", channel.ID, channel)
-	if err != nil {
-		return err
-	}
-	log.Debugf("Channel was updated? %t", updated)
-	if updated {
-		return m.markUpdated("device", channel.Device.ID, time.Now())
-	}
-	return nil
-}
-
-func (m *baseModel) getChannel(deviceID, channelID string) (*model.Channel, error) {
-
-	conn := m.pool.Get()
-	defer conn.Close()
-
-	item, err := redis.Values(conn.Do("HGETALL", "device:"+deviceID+":channel:"+channelID))
-
-	if err != nil {
-		return nil, err
-	}
-
-	channel := &model.Channel{}
-
-	if err := redis.ScanStruct(item, channel); err != nil {
-		return nil, err
-	}
-
-	return channel, nil
+func (m *DeviceModel) Delete(id string) error {
+	return m.delete(id)
 }

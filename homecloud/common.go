@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/redigo/redis"
 )
 
@@ -21,24 +22,24 @@ type baseModel struct {
 	idType  string
 	objType reflect.Type
 	conn    *ninja.Connection
+	log     *logger.Logger
 }
 
 func (m *baseModel) fetch(id string, obj interface{}) error {
-	return m.fetchWithRoot(m.idType, id, obj)
-}
 
-func (m *baseModel) fetchWithRoot(idRoot, id string, obj interface{}) error {
+	m.log.Debugf("Fetching %s %s", m.idType, id)
 
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	item, err := redis.Values(conn.Do("HGETALL", idRoot+":"+id))
+	item, err := redis.Values(conn.Do("HGETALL", m.idType+":"+id))
 
 	if err != nil {
 		return err
 	}
 
 	if len(item) == 0 {
+		m.log.Debugf("%s %s was not found", m.idType, id)
 		return RecordNotFound
 	}
 
@@ -49,64 +50,89 @@ func (m *baseModel) fetchWithRoot(idRoot, id string, obj interface{}) error {
 	return nil
 }
 
-func (m *baseModel) fetchAllIds() ([]string, error) {
+func (m *baseModel) fetchIds() ([]string, error) {
+
 	conn := m.pool.Get()
 	defer conn.Close()
-	return redis.Strings(conn.Do("SMEMBERS", m.idType+"s"))
+	ids, err := redis.Strings(conn.Do("SMEMBERS", m.idType+"s"))
+	m.log.Debugf("Found %d %s id(s)", m.idType, len(ids))
+
+	return ids, err
 }
 
-func (m *baseModel) save(id string, obj interface{}) (updated bool, err error) {
-	return m.saveWithRoot(m.idType, id, obj)
-}
+func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 
-func (m *baseModel) saveWithRoot(idRoot, id string, obj interface{}) (bool, error) {
+	m.log.Debugf("Saving %s %s", m.idType, id)
+
 	conn := m.pool.Get()
 	defer conn.Close()
 
 	existing := reflect.New(m.objType)
 
-	err := m.fetchWithRoot(idRoot, id, existing.Interface())
+	err := m.fetch(id, existing.Interface())
 	if err != nil && err != RecordNotFound {
 		return false, err
 	}
 
 	if err == nil {
 		if m.isUnchanged(existing.Interface(), obj) {
+			m.log.Debugf("%s %s was unchanged.", m.idType, id)
+
 			return false, nil
 			// XXX: Should this be return RecordUnchanged?
 		}
 	}
 
 	args := redis.Args{}
-	args = args.Add(idRoot + ":" + id)
+	args = args.Add(m.idType + ":" + id)
 	args = args.AddFlat(obj)
 
 	if _, err := conn.Do("HMSET", args...); err != nil {
 		return false, err
 	}
 
-	if _, err := conn.Do("SADD", idRoot+"s", id); err != nil {
+	if _, err := conn.Do("SADD", m.idType+"s", id); err != nil {
 		return false, err
 	}
 
-	return true, m.markUpdated(idRoot, id, time.Now())
+	return true, m.markUpdated(id, time.Now())
 }
 
-func (m *baseModel) markUpdated(idRoot, id string, t time.Time) error {
+func (m *baseModel) delete(id string) error {
+
+	m.log.Debugf("Deleting %s %s", m.idType, id)
+
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	conn.Send("MULTI")
+	conn.Send("SREM", m.idType+"s", id)
+	conn.Send("DEL", m.idType+":"+id)
+	_, err := conn.Do("EXEC")
+
+	return err
+
+	// TODO: announce deletion via MQTT
+	// publish(Ninja.topics.room.goodbye.room(roomId)
+	// publish(Ninja.topics.location.calibration.delete, {zone: roomId})
+
+}
+
+func (m *baseModel) markUpdated(id string, t time.Time) error {
 	conn := m.pool.Get()
 	defer conn.Close()
 	ts, err := t.MarshalText()
 	if err != nil {
 		return err
 	}
-	_, err = conn.Do("HSET", idRoot+":updated", id, ts)
+	_, err = conn.Do("HSET", m.idType+"s:updated", id, ts)
 	return err
 }
 
-func (m *baseModel) getLastUpdated(idRoot, id string) (*time.Time, error) {
+func (m *baseModel) getLastUpdated(id string) (*time.Time, error) {
 	conn := m.pool.Get()
 	defer conn.Close()
-	timeString, err := redis.String(conn.Do("HGET", idRoot+":updated", id))
+	timeString, err := redis.String(conn.Do("HGET", m.idType+"s:updated", id))
 
 	if err != nil || timeString == "" {
 		return nil, err
@@ -122,18 +148,15 @@ func (m *baseModel) isUnchanged(a interface{}, b interface{}) bool {
 	aFlat, bFlat := redis.Args{}.AddFlat(a), redis.Args{}.AddFlat(b)
 
 	if len(aFlat) != len(bFlat) {
-		log.Infof("Wrong length")
 		return false
 	}
 
 	for i, x := range aFlat {
 		if x != bFlat[i] {
-			log.Infof("val %s != %s", x, bFlat[i])
 			return false
 		}
 	}
 
-	log.Infof("Equal!")
 	return true
 }
 
@@ -170,15 +193,9 @@ type SyncReply struct {
 	PushedObjects    SyncDataSet              `json:"pushedObjects"`
 }
 
-func (m *baseModel) MustSync() {
-	if err := m.Sync(); err != nil {
-		log.Fatalf("Failed to sync %s s error:%s", m.idType, err)
-	}
-}
+func (m *baseModel) sync() error {
 
-func (m *baseModel) Sync() error {
-
-	log.Infof("Syncing %ss", m.idType)
+	log.Infof("sync: Syncing %ss", m.idType)
 
 	var diffList SyncDifferenceList
 
@@ -187,11 +204,20 @@ func (m *baseModel) Sync() error {
 		return err
 	}
 
+	log.Debugf("sync: Sending %d %s local update times", len(*manifest), m.idType)
+
 	calcClient := m.conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
 	err = calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, time.Second*20)
 
 	if err != nil {
 		return fmt.Errorf("Failed calling calculate_sync_items for model %s error:%s", m.idType, err)
+	}
+
+	log.Infof("sync: Cloud requires %d %s(s), Node requires %d %s(s)", len(diffList.CloudRequires), m.idType, len(diffList.NodeRequires), m.idType)
+
+	if len(diffList.CloudRequires)+len(diffList.NodeRequires) == 0 {
+		// Nothing to do, we're in sync.
+		return nil
 	}
 
 	requestIds := make([]string, 0)
@@ -209,7 +235,7 @@ func (m *baseModel) Sync() error {
 			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)
 		}
 
-		lastUpdated, err := m.getLastUpdated(m.idType, id)
+		lastUpdated, err := m.getLastUpdated(id)
 		if err != nil {
 			return fmt.Errorf("Failed retrieving last updated time for requested %s id:%s error:%s", m.idType, id, err)
 		}
@@ -229,23 +255,29 @@ func (m *baseModel) Sync() error {
 
 	for id, requestedObj := range syncReply.RequestedObjects {
 		obj := reflect.New(m.objType).Interface()
+
 		err := json.Unmarshal(requestedObj.Data, obj)
 		if err != nil {
-			return fmt.Errorf("Failed to unmarshal requested %s id:%s error: %s", m.idType, id, err)
+			log.Warningf("Failed to unmarshal requested %s id:%s error: %s", m.idType, id, err)
+			m.delete(id)
+		} else if string(requestedObj.Data) == "null" {
+			log.Infof("Requested %s id:%s has been remotely deleted", m.idType, id)
+			m.delete(id)
+		} else {
+
+			updated, err := m.save(id, obj)
+			if err != nil {
+				return fmt.Errorf("Failed to save requested %s id:%s error: %s", m.idType, id, err)
+			}
+			if !updated {
+				log.Warningf("We requested an updated %s id:%s but it was the same as what we had.", m.idType, id)
+			}
+
 		}
 
-		updated, err := m.save(id, obj)
-		if !updated {
-			log.Warningf("We requested an updated %s id:%s but it was the same as what we had.", m.idType, id)
-		}
-
+		err = m.markUpdated(id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)))
 		if err != nil {
-			return fmt.Errorf("Failed to save requested %s id:%s error: %s", m.idType, id, err)
-		}
-
-		err = m.markUpdated(m.idType, id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)))
-		if err != nil {
-			return fmt.Errorf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
+			log.Warningf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
 		}
 	}
 
@@ -293,7 +325,7 @@ func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
 
 	var manifest SyncManifest = make(map[string]int64)
 
-	item, err := redis.Strings(conn.Do("HGETALL", m.idType+":updated"))
+	item, err := redis.Strings(conn.Do("HGETALL", m.idType+"s:updated"))
 
 	for i := 0; i < len(item); i += 2 {
 		t := time.Time{}

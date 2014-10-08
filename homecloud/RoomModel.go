@@ -1,13 +1,11 @@
 package homecloud
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 
 	"code.google.com/p/go-uuid/uuid"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
@@ -16,11 +14,16 @@ import (
 
 type RoomModel struct {
 	baseModel
-	log *logger.Logger
 }
 
 func NewRoomModel(pool *redis.Pool, conn *ninja.Connection) *RoomModel {
-	return &RoomModel{baseModel{pool, "room", reflect.TypeOf(model.Thing{}), conn}, logger.GetLogger("RoomModel")}
+	return &RoomModel{baseModel{pool, "room", reflect.TypeOf(model.Thing{}), conn, logger.GetLogger("RoomModel")}}
+}
+
+func (m *RoomModel) MustSync() {
+	if err := m.sync(); err != nil {
+		m.log.Fatalf("Failed to sync rooms error:%s", m.idType, err)
+	}
 }
 
 func (m *RoomModel) Create(room *model.Room) error {
@@ -44,7 +47,7 @@ func (m *RoomModel) Fetch(id string) (*model.Room, error) {
 
 func (m *RoomModel) FetchAll() (*[]*model.Room, error) {
 
-	ids, err := m.fetchAllIds()
+	ids, err := m.fetchIds()
 
 	if err != nil {
 		return nil, err
@@ -64,30 +67,21 @@ func (m *RoomModel) FetchAll() (*[]*model.Room, error) {
 
 func (m *RoomModel) Delete(id string) error {
 
-	if id == "" {
-		return errors.New("empty room id")
+	err := m.delete(id)
+	if err != nil {
+		return err
 	}
 
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	conn.Send("MULTI")
-	conn.Send("SREM", "rooms", id)
-	conn.Send("DEL", fmt.Sprintf("room:%s", id))
-	conn.Send("DEL", fmt.Sprintf("room:%s:things", id))
-	r, err := conn.Do("EXEC")
-
-	if err != nil {
-		return err
-	}
-
-	log.Infof(spew.Sprintf("room deletion results : %v", r))
+	_, err = conn.Do("DEL", fmt.Sprintf("room:%s:things", id))
 
 	// TODO: announce deletion via MQTT
 	// publish(Ninja.topics.room.goodbye.room(roomId)
 	// publish(Ninja.topics.location.calibration.delete, {zone: roomId})
 
-	return nil
+	return err
 }
 
 func (m *RoomModel) MoveThing(from *string, to *string, thing string) error {

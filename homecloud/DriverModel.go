@@ -4,6 +4,7 @@ import (
 	"reflect"
 
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
@@ -13,7 +14,7 @@ type DriverModel struct {
 }
 
 func NewDriverModel(pool *redis.Pool, conn *ninja.Connection) *DriverModel {
-	return &DriverModel{baseModel{pool, "driver", reflect.TypeOf(model.Module{}), conn}}
+	return &DriverModel{baseModel{pool, "driver", reflect.TypeOf(model.Module{}), conn, logger.GetLogger("DriverModel")}}
 }
 
 func (m *DriverModel) Fetch(id string) (*model.Module, error) {
@@ -46,6 +47,15 @@ func (m *DriverModel) GetConfig(driverID string) (*string, error) {
 	}
 
 	return nil, err
+}
+
+func (m *DriverModel) Delete(id string) error {
+	err := m.delete(id)
+	if err != nil {
+		return err
+	}
+
+	return m.DeleteConfig(id)
 }
 
 func (m *DriverModel) SetConfig(driverID string, config string) error {

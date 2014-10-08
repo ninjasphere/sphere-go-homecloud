@@ -20,6 +20,7 @@ var conn *ninja.Connection
 
 var thingModel *ThingModel
 var deviceModel *DeviceModel
+var channelModel *ChannelModel
 var roomModel *RoomModel
 var driverModel *DriverModel
 
@@ -69,6 +70,11 @@ func Start(c *ninja.Connection) {
 		Schema: "/service/device-model",
 	})
 
+	channelModel = NewChannelModel(RedisPool, conn)
+	conn.MustExportService(deviceModel, "$home/services/ChannelModel", &model.ServiceAnnouncement{
+		Schema: "/service/channel-model",
+	})
+
 	roomModel = NewRoomModel(RedisPool, conn)
 	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
 		Schema: "/service/room-model",
@@ -79,6 +85,8 @@ func Start(c *ninja.Connection) {
 
 	//deviceModel.ClearCloud()
 	deviceModel.MustSync()
+
+	channelModel.MustSync()
 
 	//thingModel.ClearCloud()
 	thingModel.MustSync()
@@ -231,7 +239,7 @@ func startManagingDevices() {
 			return true
 		}
 
-		err = deviceModel.AddChannel(channel)
+		err = channelModel.Create(deviceID, channel)
 		if err != nil {
 			log.Warningf("Failed to save channel announcement for device:%s channel:%s error:%s", deviceID, channelID, err)
 		}
