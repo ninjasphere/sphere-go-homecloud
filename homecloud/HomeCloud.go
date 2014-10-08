@@ -8,6 +8,7 @@ import (
 
 	"git.eclipse.org/gitroot/paho/org.eclipse.paho.mqtt.golang.git"
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/go-ninja/rpc/json2"
@@ -80,15 +81,24 @@ func Start(c *ninja.Connection) {
 		Schema: "/service/room-model",
 	})
 
-	//roomModel.ClearCloud()
+	if config.Bool(false, "clearcloud") {
+		log.Infof("Clearing all cloud data in 5 seconds")
+
+		time.Sleep(time.Second * 5)
+
+		thingModel.ClearCloud()
+		channelModel.ClearCloud()
+		deviceModel.ClearCloud()
+		roomModel.ClearCloud()
+
+		log.Infof("All cloud data cleared? Probably.")
+
+		return
+	}
+
 	roomModel.MustSync()
-
-	//deviceModel.ClearCloud()
 	deviceModel.MustSync()
-
 	channelModel.MustSync()
-
-	//thingModel.ClearCloud()
 	thingModel.MustSync()
 
 	driverModel = NewDriverModel(RedisPool, conn)
