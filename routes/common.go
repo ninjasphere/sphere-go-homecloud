@@ -17,8 +17,8 @@ var NodeID = config.Serial()
 
 // ResponseWrapper used to wrap responses from the API
 type ResponseWrapper struct {
-	Type string
-	Data interface{}
+	Type string      `json:"type,omitempty"`
+	Data interface{} `json:"data,omitempty"`
 }
 
 // WriteServerErrorResponse Builds the wrapped error for the client
