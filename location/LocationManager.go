@@ -3,10 +3,10 @@ package homecloud
 import (
 	"encoding/json"
 
-	"github.com/garyburd/redigo/redis"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/redigo/redis"
 )
 
 type LocationManager interface {
