@@ -261,13 +261,17 @@ func (m *baseModel) sync() error {
 
 		err = m.fetch(id, obj, true)
 
-		if err != nil {
+		if err != nil && err != RecordNotFound {
 			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)
 		}
 
 		lastUpdated, err := m.getLastUpdated(id)
 		if err != nil {
 			return fmt.Errorf("Failed retrieving last updated time for requested %s id:%s error:%s", m.idType, id, err)
+		}
+
+		if err == RecordNotFound {
+			obj = nil
 		}
 
 		requestedData[id] = SyncObject{obj, lastUpdated.UnixNano() / int64(time.Millisecond)}
