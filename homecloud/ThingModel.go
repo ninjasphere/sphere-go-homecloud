@@ -40,14 +40,55 @@ func NewThingModel(pool *redis.Pool, conn *ninja.Connection) *ThingModel {
 		afterSave: func(obj interface{}) error {
 			return thingModel.afterSave(toThing(obj))
 		},
-		beforeDelete: func(id string) error {
-			return thingModel.beforeDelete(id)
+		afterDelete: func(obj interface{}) error {
+			return thingModel.afterDelete(toThing(obj))
 		},
 		onFetch: func(obj interface{}, syncing bool) error {
 			return thingModel.onFetch(toThing(obj), syncing)
 		},
 	}
 	return thingModel
+}
+
+func (m *ThingModel) ensureThingForDevice(device *model.Device) error {
+
+	// It was a new device, we might need to make a thing for it
+	thing, err := thingModel.FetchByDeviceId(device.ID)
+
+	if err != nil && err != RecordNotFound {
+		// An actual error
+		return err
+	}
+
+	if thing != nil {
+		// A thing already exists
+		return nil
+	}
+
+	log.Debugf("Device %s has no thing. Creating one", device.ID)
+
+	thing = &model.Thing{
+		DeviceID: &device.ID,
+		Name:     "New Thing",
+		Type:     "unknown",
+	}
+
+	if device.Signatures != nil {
+		thingType, hasThingType := (*device.Signatures)["ninja:thingType"]
+
+		if hasThingType {
+			thing.Type = thingType
+			if device.Name == nil {
+				thing.Name = "New " + thingType
+			}
+		}
+	}
+
+	if device.Name != nil {
+		thing.Name = *device.Name
+	}
+
+	return thingModel.Create(thing)
 }
 
 func (m *ThingModel) Create(thing *model.Thing) error {
@@ -129,21 +170,30 @@ func (m *ThingModel) Delete(id string) error {
 	return m.delete(id)
 }
 
-func (m *ThingModel) beforeDelete(id string) error {
+func (m *ThingModel) afterDelete(deletedThing *model.Thing) error {
 
 	// TODO: announce deletion via MQTT
 	// self.bus.publish(Ninja.topics.thing.goodbye.thing(thing.id), {id: thing.id});
 
-	conn := m.pool.Get()
-	defer conn.Close()
-
-	deviceID, err := m.getDeviceIDForThing(id)
+	deviceID, err := m.getDeviceIDForThing(deletedThing.ID)
 
 	if err == nil {
 		err = m.deleteRelationshipWithDevice(*deviceID)
 	}
 
-	return err
+	device, err := deviceModel.Fetch(*deviceID)
+
+	if err != nil && err != RecordNotFound {
+		return err
+	}
+
+	if err == RecordNotFound {
+		// The device the deleted thing was attached to no longer exists anyway
+		return nil
+	}
+
+	// Create a new, unpromoted thing for the device
+	return m.ensureThingForDevice(device)
 }
 
 func (m *ThingModel) FetchByDeviceId(deviceID string) (*model.Thing, error) {

@@ -91,57 +91,15 @@ func (m *DeviceModel) Create(device *model.Device) error {
 
 	log.Debugf("Saving device %s", device.ID)
 
-	existing, err := m.Fetch(device.ID)
-
-	if err != nil && err != RecordNotFound {
-		return err
-	}
-
 	updated, err := m.save(device.ID, device)
 
 	log.Debugf("Device was updated? %t", updated)
 
-	if err != nil || existing != nil {
+	if err != nil {
 		return err
 	}
 
-	// It was a new device, we might need to make a thing for it
-	thing, err := thingModel.FetchByDeviceId(device.ID)
-
-	if err != nil && err != RecordNotFound {
-		// An actual error
-		return err
-	}
-
-	if thing != nil {
-		// A thing already exists
-		return nil
-	}
-
-	log.Debugf("New device has no thing. Creating one")
-
-	thing = &model.Thing{
-		DeviceID: &device.ID,
-		Name:     "New Thing",
-		Type:     "unknown",
-	}
-
-	if device.Signatures != nil {
-		thingType, hasThingType := (*device.Signatures)["ninja:thingType"]
-
-		if hasThingType {
-			thing.Type = thingType
-			if device.Name == nil {
-				thing.Name = "New " + thingType
-			}
-		}
-	}
-
-	if device.Name != nil {
-		thing.Name = *device.Name
-	}
-
-	return thingModel.Create(thing)
+	return thingModel.ensureThingForDevice(device)
 }
 
 func (m *DeviceModel) Delete(id string) error {

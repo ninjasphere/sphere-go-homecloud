@@ -19,15 +19,15 @@ var (
 )
 
 type baseModel struct {
-	syncing      *sync.WaitGroup
-	pool         *redis.Pool
-	idType       string
-	objType      reflect.Type
-	conn         *ninja.Connection
-	log          *logger.Logger
-	afterSave    func(interface{}) error
-	beforeDelete func(string) error
-	onFetch      func(obj interface{}, syncing bool) error
+	syncing     *sync.WaitGroup
+	pool        *redis.Pool
+	idType      string
+	objType     reflect.Type
+	conn        *ninja.Connection
+	log         *logger.Logger
+	afterSave   func(interface{}) error
+	afterDelete func(obj interface{}) error
+	onFetch     func(obj interface{}, syncing bool) error
 }
 
 func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
@@ -123,14 +123,11 @@ func (m *baseModel) delete(id string) error {
 
 	m.log.Debugf("Deleting %s %s", m.idType, id)
 
-	var err error
+	existing := reflect.New(m.objType).Interface()
 
-	if m.beforeDelete != nil {
-		err = m.beforeDelete(id)
-	}
-
-	if err != nil {
-		return err
+	existingErr := m.fetch(id, existing, false)
+	if existingErr != nil && existingErr != RecordNotFound {
+		return fmt.Errorf("Failed fetching existing %s before delete. error:%s", m.idType, existingErr)
 	}
 
 	conn := m.pool.Get()
@@ -139,7 +136,15 @@ func (m *baseModel) delete(id string) error {
 	conn.Send("MULTI")
 	conn.Send("SREM", m.idType+"s", id)
 	conn.Send("DEL", m.idType+":"+id)
-	_, err = conn.Do("EXEC")
+	_, err := conn.Do("EXEC")
+
+	if m.afterDelete != nil && existingErr == nil {
+		err = m.afterDelete(existing)
+
+		if err != nil {
+			return fmt.Errorf("Failed on afterDelete: %s", err)
+		}
+	}
 
 	return m.markUpdated(id, time.Now())
 }
