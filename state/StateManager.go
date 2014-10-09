@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
@@ -54,6 +55,8 @@ func (sm *NinjaStateManager) Merge(thing *model.Thing) {
 			if deviceID != nil {
 				continue
 			}
+
+			sm.log.Infof(spew.Sprintf("channelModel v% %v", channelModel, deviceID))
 
 			key := fmt.Sprintf("%s-%s", *deviceID, channelModel.ID)
 
