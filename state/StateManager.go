@@ -11,11 +11,6 @@ import (
 	"github.com/ninjasphere/go-ninja/model"
 )
 
-// subcribe to all $device/+/channel/+/event/state
-
-// store in a hash by $device/:deviceid/channel/:channelid/event/:eventid
-//
-
 // struct date, payload
 type LastState struct {
 	Timestamp int64       `json:"timestamp"`
@@ -60,10 +55,9 @@ func (sm *NinjaStateManager) Merge(thing *model.Thing) {
 
 			sm.log.Infof("channel key %s state %v", key, sm.lastStates[key])
 
-			if sm.lastStates[key] != nil {
-				channelModel.LastState = sm.lastStates[key]
+			if val, ok := sm.lastStates[key]; ok {
+				channelModel.LastState = val
 			}
-
 		}
 	}
 
