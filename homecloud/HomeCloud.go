@@ -192,7 +192,7 @@ func startManagingDrivers() {
 
 		node, driver := values["node"], values["driver"]
 
-		log.Infof("Got driver announcement node:%s driver:%s announcement:%s", node, driver, announcement)
+		log.Infof("Got driver announcement node:%s driver:%s", node, driver)
 
 		if announcement == nil {
 			log.Warningf("Nil driver announcement from node:%s driver:%s", node, driver)
@@ -250,7 +250,7 @@ func startManagingDevices() {
 
 		id := values["id"]
 
-		log.Infof("Got device announcement device:%s announcement:%s", id, announcement)
+		log.Infof("Got device announcement device:%s", id)
 
 		if announcement == nil {
 			log.Warningf("Nil driver announcement from device:%s", id)
@@ -277,7 +277,7 @@ func startManagingDevices() {
 
 		deviceID, channelID := values["device"], values["channel"]
 
-		log.Infof("Got channel announcement device:%s channel:%s announcement:%s", deviceID, channelID, announcement)
+		log.Infof("Got channel announcement device:%s channel:%s", deviceID, channelID)
 
 		if announcement == nil {
 			log.Warningf("Nil channel announcement from device:%s channel:%s", deviceID, channelID)
