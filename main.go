@@ -13,14 +13,14 @@ var log = logger.GetLogger("HomeCloud")
 
 func main() {
 
+	log.Infof("Welcome home, Ninja.")
+
 	conn, err := ninja.Connect("sphere-go-homecloud")
 	if err != nil {
 		log.Fatalf("Failed to connect to sphere: %s", err)
 	}
 
 	homecloud.Start(conn)
-
-	log.Infof("hello")
 
 	restServer := NewRestServer(conn) // TODO: Should we reuse the persistance layer from homecloud?
 

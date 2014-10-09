@@ -3,6 +3,7 @@ package homecloud
 import (
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -14,19 +15,29 @@ type DeviceModel struct {
 	baseModel
 }
 
+/*
+pool    *redis.Pool
+idType  string
+objType reflect.Type
+conn    *ninja.Connection
+log     *logger.Logger
+*/
+
 func NewDeviceModel(pool *redis.Pool, conn *ninja.Connection) *DeviceModel {
 	return &DeviceModel{
-		baseModel{pool, "device", reflect.TypeOf(model.Device{}), conn, logger.GetLogger("DeviceModel")},
-	}
-}
-
-func (m *DeviceModel) MustSync() {
-	if err := m.sync(); err != nil {
-		m.log.Fatalf("Failed to sync devices error:%s", err)
+		baseModel{
+			syncing: &sync.WaitGroup{},
+			pool:    pool,
+			idType:  "device",
+			objType: reflect.TypeOf(model.Device{}),
+			conn:    conn,
+			log:     logger.GetLogger("DeviceModel"),
+		},
 	}
 }
 
 func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
+	m.syncing.Wait()
 
 	device := &model.Device{}
 
@@ -42,10 +53,19 @@ func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
 
 	device.Channels = channels
 
+	thingID, err := thingModel.getThingIDForDevice(deviceID)
+
+	if err != nil && err != RecordNotFound {
+		return nil, err
+	}
+
+	device.ThingID = thingID
+
 	return device, nil
 }
 
 func (m *DeviceModel) FetchAll() (*[]*model.Device, error) {
+	m.syncing.Wait()
 
 	ids, err := m.fetchIds()
 
@@ -66,17 +86,15 @@ func (m *DeviceModel) FetchAll() (*[]*model.Device, error) {
 }
 
 func (m *DeviceModel) Create(device *model.Device) error {
-	log.Debugf("Saving device")
+	m.syncing.Wait()
+	//defer m.sync()
+
+	log.Debugf("Saving device %s", device.ID)
 
 	existing, err := m.Fetch(device.ID)
 
 	if err != nil && err != RecordNotFound {
 		return err
-	}
-
-	if existing != nil {
-		// This relationship can not be changed here.
-		device.Thing = existing.Thing
 	}
 
 	updated, err := m.save(device.ID, device)
@@ -88,10 +106,15 @@ func (m *DeviceModel) Create(device *model.Device) error {
 	}
 
 	// It was a new device, we might need to make a thing for it
-
 	thing, err := thingModel.FetchByDeviceId(device.ID)
 
 	if err != nil && err != RecordNotFound {
+		// An actual error
+		return err
+	}
+
+	if thing != nil {
+		// A thing already exists
 		return nil
 	}
 
@@ -118,18 +141,16 @@ func (m *DeviceModel) Create(device *model.Device) error {
 		thing.Name = *device.Name
 	}
 
-	err = thingModel.Create(thing)
-
-	if err != nil && err != RecordNotFound {
-		return nil
-	}
-
-	device.Thing = &thing.ID
-
-	_, err = m.save(device.ID, device)
-	return err
+	return thingModel.Create(thing)
 }
 
 func (m *DeviceModel) Delete(id string) error {
-	return m.delete(id)
+	m.syncing.Wait()
+	//defer m.sync()
+
+	err := m.delete(id)
+	if err != nil {
+		err = thingModel.deleteRelationshipWithDevice(id)
+	}
+	return err
 }

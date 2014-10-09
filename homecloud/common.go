@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
@@ -18,11 +19,15 @@ var (
 )
 
 type baseModel struct {
-	pool    *redis.Pool
-	idType  string
-	objType reflect.Type
-	conn    *ninja.Connection
-	log     *logger.Logger
+	syncing      *sync.WaitGroup
+	pool         *redis.Pool
+	idType       string
+	objType      reflect.Type
+	conn         *ninja.Connection
+	log          *logger.Logger
+	afterSave    func(interface{}) error
+	beforeDelete func(string) error
+	onFetch      func(interface{}) error
 }
 
 func (m *baseModel) fetch(id string, obj interface{}) error {
@@ -47,7 +52,11 @@ func (m *baseModel) fetch(id string, obj interface{}) error {
 		return err
 	}
 
-	return nil
+	if m.onFetch != nil {
+		err = m.onFetch(obj)
+	}
+
+	return err
 }
 
 func (m *baseModel) fetchIds() ([]string, error) {
@@ -87,12 +96,24 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 	args = args.Add(m.idType + ":" + id)
 	args = args.AddFlat(obj)
 
-	if _, err := conn.Do("HMSET", args...); err != nil {
-		return false, err
+	_, err = conn.Do("HMSET", args...)
+
+	if err != nil {
+		return false, fmt.Errorf("Failed to save object %s error:%s", id, err)
 	}
 
-	if _, err := conn.Do("SADD", m.idType+"s", id); err != nil {
-		return false, err
+	_, err = conn.Do("SADD", m.idType+"s", id)
+
+	if err != nil {
+		return false, fmt.Errorf("Failed to add object %s to list of ids error:%s", id, err)
+	}
+
+	if m.afterSave != nil {
+		err = m.afterSave(obj)
+
+		if err != nil {
+			return true, fmt.Errorf("Error during afterSave callback: %s", err)
+		}
 	}
 
 	return true, m.markUpdated(id, time.Now())
@@ -102,20 +123,25 @@ func (m *baseModel) delete(id string) error {
 
 	m.log.Debugf("Deleting %s %s", m.idType, id)
 
+	var err error
+
+	if m.beforeDelete != nil {
+		err = m.beforeDelete(id)
+	}
+
+	if err != nil {
+		return err
+	}
+
 	conn := m.pool.Get()
 	defer conn.Close()
 
 	conn.Send("MULTI")
 	conn.Send("SREM", m.idType+"s", id)
 	conn.Send("DEL", m.idType+":"+id)
-	_, err := conn.Do("EXEC")
+	_, err = conn.Do("EXEC")
 
-	return err
-
-	// TODO: announce deletion via MQTT
-	// publish(Ninja.topics.room.goodbye.room(roomId)
-	// publish(Ninja.topics.location.calibration.delete, {zone: roomId})
-
+	return m.markUpdated(id, time.Now())
 }
 
 func (m *baseModel) markUpdated(id string, t time.Time) error {
@@ -160,12 +186,7 @@ func (m *baseModel) isUnchanged(a interface{}, b interface{}) bool {
 	return true
 }
 
-/*
-The manifest needs to be sent via rpc
-conn.GetServiceClient("$ninja/services/rpc/modelstore").call("calculate_sync_items", manifest, &whateverTheReplyIs, time.Second * 20) )
-*/
-
-// mosquitto_pub -m '{"id":123, "params": ["device",{}],"jsonrpc": "2.0","method":"modelstore.calculate_sync_items","time":132123123}' -t '$ninja/services/rpc/modelstore/calculate_sync_items'
+// ------- Syncing -------
 
 type SyncDifferenceList struct {
 	Model         string       `json:"model"`
@@ -194,6 +215,9 @@ type SyncReply struct {
 }
 
 func (m *baseModel) sync() error {
+	m.syncing.Wait()
+	m.syncing.Add(1)
+	defer m.syncing.Done()
 
 	log.Infof("sync: Syncing %ss", m.idType)
 

@@ -2,6 +2,7 @@ package homecloud
 
 import (
 	"reflect"
+	"sync"
 
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -9,15 +10,28 @@ import (
 	"github.com/ninjasphere/redigo/redis"
 )
 
+// TODO: Sync driver config
+
 type DriverModel struct {
 	baseModel
 }
 
 func NewDriverModel(pool *redis.Pool, conn *ninja.Connection) *DriverModel {
-	return &DriverModel{baseModel{pool, "driver", reflect.TypeOf(model.Module{}), conn, logger.GetLogger("DriverModel")}}
+	return &DriverModel{
+		baseModel{
+			syncing: &sync.WaitGroup{},
+			pool:    pool,
+			idType:  "driver",
+			objType: reflect.TypeOf(model.Module{}),
+			conn:    conn,
+			log:     logger.GetLogger("DriverModel"),
+		},
+	}
 }
 
 func (m *DriverModel) Fetch(id string) (*model.Module, error) {
+	m.syncing.Wait()
+	//defer m.sync()
 
 	module := &model.Module{}
 
@@ -29,11 +43,15 @@ func (m *DriverModel) Fetch(id string) (*model.Module, error) {
 }
 
 func (m *DriverModel) Create(module *model.Module) error {
+	m.syncing.Wait()
+	//defer m.sync()
+
 	_, err := m.save(module.ID, module)
 	return err
 }
 
 func (m *DriverModel) GetConfig(driverID string) (*string, error) {
+	m.syncing.Wait()
 
 	conn := m.pool.Get()
 	defer conn.Close()
@@ -50,6 +68,9 @@ func (m *DriverModel) GetConfig(driverID string) (*string, error) {
 }
 
 func (m *DriverModel) Delete(id string) error {
+	m.syncing.Wait()
+	//defer m.sync()
+
 	err := m.delete(id)
 	if err != nil {
 		return err
@@ -59,6 +80,8 @@ func (m *DriverModel) Delete(id string) error {
 }
 
 func (m *DriverModel) SetConfig(driverID string, config string) error {
+	m.syncing.Wait()
+	//defer m.sync()
 
 	conn := m.pool.Get()
 	defer conn.Close()
@@ -68,6 +91,8 @@ func (m *DriverModel) SetConfig(driverID string, config string) error {
 }
 
 func (m *DriverModel) DeleteConfig(driverID string) error {
+	m.syncing.Wait()
+	//defer m.sync()
 
 	conn := m.pool.Get()
 	defer conn.Close()

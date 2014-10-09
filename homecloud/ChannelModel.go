@@ -3,6 +3,7 @@ package homecloud
 import (
 	"fmt"
 	"reflect"
+	"sync"
 
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -15,16 +16,22 @@ type ChannelModel struct {
 }
 
 func NewChannelModel(pool *redis.Pool, conn *ninja.Connection) *ChannelModel {
-	return &ChannelModel{baseModel{pool, "channel", reflect.TypeOf(model.Channel{}), conn, logger.GetLogger("ChannelModel")}}
-}
-
-func (m *ChannelModel) MustSync() {
-	if err := m.sync(); err != nil {
-		m.log.Fatalf("Failed to sync channels error:%s", err)
+	return &ChannelModel{
+		baseModel{
+			syncing: &sync.WaitGroup{},
+			pool:    pool,
+			idType:  "channel",
+			objType: reflect.TypeOf(model.Channel{}),
+			conn:    conn,
+			log:     logger.GetLogger("ChannelModel"),
+		},
 	}
 }
 
 func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
+	m.syncing.Wait()
+	//defer m.sync()
+
 	if _, err := m.save(deviceID+"-"+channel.ID, channel); err != nil {
 		return err
 	}
@@ -40,6 +47,8 @@ func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
 }
 
 func (m *ChannelModel) Delete(deviceID string, channelID string) error {
+	m.syncing.Wait()
+	//defer m.sync()
 
 	err := m.delete(deviceID + "-" + channelID)
 	if err != nil {
@@ -59,6 +68,8 @@ func (m *ChannelModel) Delete(deviceID string, channelID string) error {
 }
 
 func (m *ChannelModel) FetchAll(deviceID string) (*[]*model.Channel, error) {
+	m.syncing.Wait()
+
 	conn := m.pool.Get()
 	defer conn.Close()
 	ids, err := redis.Strings(conn.Do("SMEMBERS", "device:"+deviceID+":channels"))
@@ -81,6 +92,7 @@ func (m *ChannelModel) FetchAll(deviceID string) (*[]*model.Channel, error) {
 }
 
 func (m *ChannelModel) Fetch(deviceID, channelID string) (*model.Channel, error) {
+	m.syncing.Wait()
 	channel := &model.Channel{}
 
 	if err := m.fetch(deviceID+"-"+channelID, channel); err != nil {

@@ -3,6 +3,7 @@ package homecloud
 import (
 	"fmt"
 	"reflect"
+	"sync"
 
 	"code.google.com/p/go-uuid/uuid"
 
@@ -17,16 +18,22 @@ type RoomModel struct {
 }
 
 func NewRoomModel(pool *redis.Pool, conn *ninja.Connection) *RoomModel {
-	return &RoomModel{baseModel{pool, "room", reflect.TypeOf(model.Thing{}), conn, logger.GetLogger("RoomModel")}}
-}
-
-func (m *RoomModel) MustSync() {
-	if err := m.sync(); err != nil {
-		m.log.Fatalf("Failed to sync rooms error:%s", m.idType, err)
+	return &RoomModel{
+		baseModel{
+			syncing: &sync.WaitGroup{},
+			pool:    pool,
+			idType:  "room",
+			objType: reflect.TypeOf(model.Room{}),
+			conn:    conn,
+			log:     logger.GetLogger("RoomModel"),
+		},
 	}
 }
 
 func (m *RoomModel) Create(room *model.Room) error {
+	m.syncing.Wait()
+	//defer m.sync()
+
 	if room.ID == "" {
 		room.ID = uuid.NewUUID().String()
 	}
@@ -36,6 +43,8 @@ func (m *RoomModel) Create(room *model.Room) error {
 }
 
 func (m *RoomModel) Fetch(id string) (*model.Room, error) {
+	m.syncing.Wait()
+
 	room := &model.Room{}
 
 	if err := m.fetch(id, room); err != nil {
@@ -46,6 +55,7 @@ func (m *RoomModel) Fetch(id string) (*model.Room, error) {
 }
 
 func (m *RoomModel) FetchAll() (*[]*model.Room, error) {
+	m.syncing.Wait()
 
 	ids, err := m.fetchIds()
 
@@ -66,6 +76,8 @@ func (m *RoomModel) FetchAll() (*[]*model.Room, error) {
 }
 
 func (m *RoomModel) Delete(id string) error {
+	m.syncing.Wait()
+	//defer m.sync()
 
 	err := m.delete(id)
 	if err != nil {
@@ -85,6 +97,9 @@ func (m *RoomModel) Delete(id string) error {
 }
 
 func (m *RoomModel) MoveThing(from *string, to *string, thing string) error {
+	m.syncing.Wait()
+	//defer m.sync()
+
 	var err error
 
 	conn := m.pool.Get()
