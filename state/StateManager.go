@@ -6,15 +6,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 )
-
-// subcribe to all $device/+/channel/+/event/state
-
-// store in a hash by $device/:deviceid/channel/:channelid/event/:eventid
-//
 
 // struct date, payload
 type LastState struct {
@@ -56,14 +52,19 @@ func (sm *NinjaStateManager) Merge(thing *model.Thing) {
 	if thing.Device != nil && thing.Device.Channels != nil {
 		for _, channelModel := range *thing.Device.Channels {
 
+			if deviceID == nil {
+				continue
+			}
+
+			sm.log.Infof(spew.Sprintf("channelModel %v %v", channelModel, deviceID))
+
 			key := fmt.Sprintf("%s-%s", *deviceID, channelModel.ID)
 
 			sm.log.Infof("channel key %s state %v", key, sm.lastStates[key])
 
-			if sm.lastStates[key] != nil {
-				channelModel.LastState = sm.lastStates[key]
+			if val, ok := sm.lastStates[key]; ok {
+				channelModel.LastState = val
 			}
-
 		}
 	}
 
