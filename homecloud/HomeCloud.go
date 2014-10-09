@@ -107,8 +107,36 @@ func Start(c *ninja.Connection) {
 	startManagingDevices()
 	startMonitoringLocations()
 
-	//spew.Dump(thingModel.FetchAll())
-	//spew.Dump(thingModel.FetchByType("light"))
+	go func() {
+		// Give it a chance to sync first...
+		time.Sleep(time.Second * 10)
+		startDrivers()
+	}()
+
+}
+
+func startDrivers() {
+
+	do := func(name string, task string) error {
+		return conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
+	}
+
+	for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-ble", "driver-go-hue", "driver-go-wemo"} {
+		log.Infof("-- (Re)starting '%s'", name)
+
+		err := do(name, "stop")
+		if err != nil {
+			log.Fatalf("Failed to send %s stop message! %s", name, err)
+		}
+
+		time.Sleep(time.Second * 2)
+
+		err = do(name, "start")
+		if err != nil {
+			log.Fatalf("Failed to send %s start message! %s", name, err)
+		}
+	}
+
 }
 
 func startDriver(node string, driverID string, config *string) error {
