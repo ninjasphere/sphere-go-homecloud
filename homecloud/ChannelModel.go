@@ -32,6 +32,8 @@ func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
+	channel.DeviceID = deviceID
+
 	if _, err := m.save(deviceID+"-"+channel.ID, channel); err != nil {
 		return err
 	}
