@@ -200,9 +200,10 @@ func (m *ThingModel) onFetch(thing *model.Thing) error {
 	if deviceID != nil {
 		device, err := deviceModel.Fetch(*deviceID)
 		if err != nil {
-			return fmt.Errorf("Failed to fetch nested device (id:%s) : %s", *deviceID, err)
+			return fmt.Errorf("Failed to fetch nested device (id:%s) on thing %s : %s", *deviceID, thing.ID, err)
 		}
 		thing.Device = device
+		thing.DeviceID = deviceID
 	}
 
 	return nil
