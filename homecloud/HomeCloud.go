@@ -287,7 +287,7 @@ func startManagingDevices() {
 		channel := &model.Channel{}
 		err := json.Unmarshal(*announcement, channel)
 
-		if announcement == nil {
+		if err != nil {
 			log.Warningf("Could not parse channel announcement from device:%s channel:%s error:%s", deviceID, channelID, err)
 			return true
 		}
