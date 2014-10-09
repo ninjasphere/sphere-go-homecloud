@@ -52,11 +52,11 @@ func (sm *NinjaStateManager) Merge(thing *model.Thing) {
 	if thing.Device != nil && thing.Device.Channels != nil {
 		for _, channelModel := range *thing.Device.Channels {
 
-			if deviceID != nil {
+			if deviceID == nil {
 				continue
 			}
 
-			sm.log.Infof(spew.Sprintf("channelModel v% %v", channelModel, deviceID))
+			sm.log.Infof(spew.Sprintf("channelModel %v %v", channelModel, deviceID))
 
 			key := fmt.Sprintf("%s-%s", *deviceID, channelModel.ID)
 
