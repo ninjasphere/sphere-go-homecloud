@@ -41,7 +41,7 @@ func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
 
 	device := &model.Device{}
 
-	if err := m.fetch(deviceID, device); err != nil {
+	if err := m.fetch(deviceID, device, false); err != nil {
 		return nil, err
 	}
 

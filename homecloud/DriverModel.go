@@ -35,7 +35,7 @@ func (m *DriverModel) Fetch(id string) (*model.Module, error) {
 
 	module := &model.Module{}
 
-	if err := m.fetch(id, module); err != nil {
+	if err := m.fetch(id, module, false); err != nil {
 		return nil, err
 	}
 

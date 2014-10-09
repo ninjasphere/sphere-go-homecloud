@@ -43,8 +43,8 @@ func NewThingModel(pool *redis.Pool, conn *ninja.Connection) *ThingModel {
 		beforeDelete: func(id string) error {
 			return thingModel.beforeDelete(id)
 		},
-		onFetch: func(obj interface{}) error {
-			return thingModel.onFetch(toThing(obj))
+		onFetch: func(obj interface{}, syncing bool) error {
+			return thingModel.onFetch(toThing(obj), syncing)
 		},
 	}
 	return thingModel
@@ -183,14 +183,14 @@ func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 	m.syncing.Wait()
 	thing := &model.Thing{}
 
-	if err := m.fetch(id, thing); err != nil {
+	if err := m.fetch(id, thing, false); err != nil {
 		return nil, fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
 	}
 
 	return thing, nil
 }
 
-func (m *ThingModel) onFetch(thing *model.Thing) error {
+func (m *ThingModel) onFetch(thing *model.Thing, syncing bool) error {
 	deviceID, err := m.getDeviceIDForThing(thing.ID)
 
 	if err != nil && err != RecordNotFound {
@@ -198,12 +198,16 @@ func (m *ThingModel) onFetch(thing *model.Thing) error {
 	}
 
 	if deviceID != nil {
-		device, err := deviceModel.Fetch(*deviceID)
-		if err != nil {
-			return fmt.Errorf("Failed to fetch nested device (id:%s) on thing %s : %s", *deviceID, thing.ID, err)
-		}
-		thing.Device = device
+
 		thing.DeviceID = deviceID
+
+		if !syncing {
+			device, err := deviceModel.Fetch(*deviceID)
+			if err != nil {
+				return fmt.Errorf("Failed to fetch nested device (id:%s) on thing %s : %s", *deviceID, thing.ID, err)
+			}
+			thing.Device = device
+		}
 	}
 
 	return nil
@@ -256,7 +260,7 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 
 	oldThing := &model.Thing{}
 
-	if err := m.fetch(id, thing); err != nil {
+	if err := m.fetch(id, thing, false); err != nil {
 		return fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
 	}
 

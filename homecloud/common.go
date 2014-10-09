@@ -27,10 +27,10 @@ type baseModel struct {
 	log          *logger.Logger
 	afterSave    func(interface{}) error
 	beforeDelete func(string) error
-	onFetch      func(interface{}) error
+	onFetch      func(obj interface{}, syncing bool) error
 }
 
-func (m *baseModel) fetch(id string, obj interface{}) error {
+func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
 
 	m.log.Debugf("Fetching %s %s", m.idType, id)
 
@@ -53,7 +53,7 @@ func (m *baseModel) fetch(id string, obj interface{}) error {
 	}
 
 	if m.onFetch != nil {
-		err = m.onFetch(obj)
+		err = m.onFetch(obj, syncing)
 	}
 
 	return err
@@ -78,7 +78,7 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 
 	existing := reflect.New(m.objType)
 
-	err := m.fetch(id, existing.Interface())
+	err := m.fetch(id, existing.Interface(), false)
 	if err != nil && err != RecordNotFound {
 		return false, err
 	}
@@ -253,7 +253,8 @@ func (m *baseModel) sync() error {
 
 	for id := range diffList.CloudRequires {
 		obj := reflect.New(m.objType).Interface()
-		err = m.fetch(id, obj)
+
+		err = m.fetch(id, obj, true)
 
 		if err != nil {
 			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)

@@ -47,7 +47,7 @@ func (m *RoomModel) Fetch(id string) (*model.Room, error) {
 
 	room := &model.Room{}
 
-	if err := m.fetch(id, room); err != nil {
+	if err := m.fetch(id, room, false); err != nil {
 		return nil, err
 	}
 

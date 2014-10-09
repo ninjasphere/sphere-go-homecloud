@@ -97,7 +97,7 @@ func (m *ChannelModel) Fetch(deviceID, channelID string) (*model.Channel, error)
 	m.syncing.Wait()
 	channel := &model.Channel{}
 
-	if err := m.fetch(deviceID+"-"+channelID, channel); err != nil {
+	if err := m.fetch(deviceID+"-"+channelID, channel, false); err != nil {
 		return nil, fmt.Errorf("Failed to fetch channel (device id: %s channel id:%s): %s", deviceID, channelID, err)
 	}
 
