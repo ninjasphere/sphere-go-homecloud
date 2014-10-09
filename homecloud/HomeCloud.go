@@ -96,10 +96,25 @@ func Start(c *ninja.Connection) {
 		return
 	}
 
-	roomModel.MustSync()
-	deviceModel.MustSync()
-	channelModel.MustSync()
-	thingModel.MustSync()
+	go func() {
+		for {
+			log.Infof("\n\n\n------ Timed model syncing started (every 30 min) ------ ")
+
+			roomResult := roomModel.sync()
+			deviceResult := deviceModel.sync()
+			channelResult := channelModel.sync()
+			thingResult := thingModel.sync()
+
+			log.Infof("Room sync error: %s", roomResult)
+			log.Infof("Device sync error: %s", deviceResult)
+			log.Infof("Channel sync error: %s", channelResult)
+			log.Infof("Thing sync error: %s", thingResult)
+
+			log.Infof("------ Timed model syncing complete ------\n\n\n")
+
+			time.Sleep(time.Minute * 30)
+		}
+	}()
 
 	driverModel = NewDriverModel(RedisPool, conn)
 
