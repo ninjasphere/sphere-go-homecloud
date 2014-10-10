@@ -218,7 +218,17 @@ func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	var err error
+	existing, err := m.Fetch(thingID)
+
+	if err != nil {
+		return err
+	}
+
+	err = roomModel.MoveThing(existing.Location, roomID, thingID)
+
+	if err != nil {
+		return fmt.Errorf("Failed to move thing %s from %s to %s", thingID, existing.Location, roomID)
+	}
 
 	if roomID == nil {
 		_, err = conn.Do("HDEL", "thing:"+thingID, "location")

@@ -105,6 +105,19 @@ func (m *RoomModel) MoveThing(from *string, to *string, thing string) error {
 	conn := m.pool.Get()
 	defer conn.Close()
 
+	if to != nil {
+		_, err := m.Fetch(*to) // Ensure the room we are putting it into actually exists
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// Don't do a damn thing.
+	if from == to {
+		return nil
+	}
+
 	if to != nil && from == nil {
 		// we need to add it
 
