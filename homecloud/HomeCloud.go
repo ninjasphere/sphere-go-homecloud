@@ -321,8 +321,8 @@ func startMonitoringLocations() {
 		}
 
 		thing, err := thingModel.FetchByDeviceId(deviceID)
-		if err != nil {
-			log.FatalError(err, fmt.Sprintf("Failed to fetch thing by device id %s", deviceID))
+		if err != nil && err != RecordNotFound {
+			log.Warningf("Failed to fetch thing by device id %s", deviceID)
 		}
 
 		if update.Zone == nil {
@@ -333,7 +333,7 @@ func startMonitoringLocations() {
 
 		hasChangedZone := true
 
-		if thing == nil {
+		if err == RecordNotFound {
 			log.Debugf("Device %s is not attached to a thing. Ignoring.", deviceID)
 		} else {
 
@@ -357,12 +357,12 @@ func startMonitoringLocations() {
 				}
 
 				if update.Zone != nil {
-					room, err := roomModel.Fetch(*update.Zone)
-					if err != nil {
+					_, err := roomModel.Fetch(*update.Zone)
+					if err != nil && err != RecordNotFound {
 						log.FatalError(err, fmt.Sprintf("Failed to fetch room %s", *update.Zone))
 					}
 
-					if room == nil {
+					if err != RecordNotFound {
 						// XXX: TODO: Remove me once the cloud room model is sync'd and locatino service uses it
 						log.Infof("Unknown room %s. Advising remote location service to forget it.", *update.Zone)
 
