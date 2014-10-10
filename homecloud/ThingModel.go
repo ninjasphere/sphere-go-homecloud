@@ -310,7 +310,7 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 
 	oldThing := &model.Thing{}
 
-	if err := m.fetch(id, thing, false); err != nil {
+	if err := m.fetch(id, oldThing, false); err != nil {
 		return fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
 	}
 
