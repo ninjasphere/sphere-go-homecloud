@@ -109,7 +109,7 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	m.log.Debugf("afterSave - thing received id:%s with device:%s", thing.ID, *thing.DeviceID)
+	m.log.Debugf("afterSave - thing received id:%s with device:%s", thing.ID, thing.DeviceID)
 
 	existingDeviceID, err := m.getDeviceIDForThing(thing.ID)
 
