@@ -316,6 +316,7 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 
 	oldThing.Name = thing.Name
 	oldThing.Type = thing.Type
+	oldThing.Promoted = thing.Promoted
 
 	if _, err := m.save(id, oldThing); err != nil {
 		return fmt.Errorf("Failed to update thing (id:%s): %s", id, err)
