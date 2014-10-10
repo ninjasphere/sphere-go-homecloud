@@ -345,12 +345,6 @@ func startMonitoringLocations() {
 
 				log.Debugf("Thing %s (%s) (Device %s) moved from %s to %s", thing.ID, thing.Name, deviceID, thing.Location, update.Zone)
 
-				err = roomModel.MoveThing(thing.Location, update.Zone, thing.ID)
-
-				if err != nil {
-					log.FatalError(err, fmt.Sprintf("Failed to update location of thing %s", thing.ID))
-				}
-
 				err = thingModel.SetLocation(thing.ID, update.Zone)
 				if err != nil {
 					log.FatalError(err, fmt.Sprintf("Failed to update location property of thing %s", thing.ID))
