@@ -78,8 +78,8 @@ func (lr *RoomRouter) GetAll(w http.ResponseWriter, roomModel *homecloud.RoomMod
 
 // PostNewRoom creates a new room using the name submitted
 //
-// Request {"name":"Bedroom"}
-// Response {"name":"Bedroom","id":"16c63268-c0e5-48a2-b312-c74c64837802"}
+// Request {"name":"Bedroom","type":"bedroom"}
+// Response {"name":"Bedroom","type":"bedroom","id":"16c63268-c0e5-48a2-b312-c74c64837802"}
 //
 func (lr *RoomRouter) PostNewRoom(r *http.Request, w http.ResponseWriter, roomModel *homecloud.RoomModel) {
 
@@ -91,9 +91,10 @@ func (lr *RoomRouter) PostNewRoom(r *http.Request, w http.ResponseWriter, roomMo
 		return
 	}
 
-	name := body["name"].(string)
+	roomName := body["name"].(string)
+	roomType := body["type"].(string)
 
-	room := &model.Room{Name: name}
+	room := &model.Room{Name: roomName, Type: roomType}
 
 	err = roomModel.Create(room)
 
