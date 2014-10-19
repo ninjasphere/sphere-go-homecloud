@@ -127,11 +127,13 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 		}
 	}
 
-	if brandNew {
-		log.Infof("A new one!")
-		m.sendEvent("created", id)
-	} else {
-		m.sendEvent("updated", id)
+	if m.sendEvent != nil {
+		if brandNew {
+			log.Infof("A new one!")
+			m.sendEvent("created", id)
+		} else {
+			m.sendEvent("updated", id)
+		}
 	}
 
 	return true, m.markUpdated(id, time.Now())
@@ -164,7 +166,9 @@ func (m *baseModel) delete(id string) error {
 		}
 	}
 
-	m.sendEvent("deleted", id)
+	if m.sendEvent != nil {
+		m.sendEvent("deleted", id)
+	}
 
 	return m.markUpdated(id, time.Now())
 }
