@@ -122,6 +122,8 @@ func Start(c *ninja.Connection) {
 	startManagingDevices()
 	startMonitoringLocations()
 
+	ensureNodeDeviceExists()
+
 	go func() {
 		// Give it a chance to sync first...
 		time.Sleep(time.Second * 10)
