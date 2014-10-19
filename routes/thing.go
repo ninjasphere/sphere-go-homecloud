@@ -55,7 +55,7 @@ func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel
 	WriteServerResponse(things, http.StatusOK, w)
 }
 
-// GetAll retrieves a thing using it's identifier
+// GetThing retrieves a thing using it's identifier
 func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, thingModel *homecloud.ThingModel, stateManager state.StateManager) {
 
 	thing, err := thingModel.Fetch(params["id"])

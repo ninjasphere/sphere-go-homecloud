@@ -28,6 +28,7 @@ type baseModel struct {
 	afterSave   func(interface{}) error
 	afterDelete func(obj interface{}) error
 	onFetch     func(obj interface{}, syncing bool) error
+	sendEvent   func(event string, payload interface{}) error
 }
 
 func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
@@ -59,6 +60,13 @@ func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
 	return err
 }
 
+func (m *baseModel) Exists(id string) (bool, error) {
+	conn := m.pool.Get()
+	defer conn.Close()
+
+	return redis.Bool(conn.Do("EXISTS", m.idType+":"+id))
+}
+
 func (m *baseModel) fetchIds() ([]string, error) {
 
 	conn := m.pool.Get()
@@ -79,9 +87,12 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 	existing := reflect.New(m.objType)
 
 	err := m.fetch(id, existing.Interface(), false)
+
 	if err != nil && err != RecordNotFound {
 		return false, err
 	}
+
+	brandNew := err == RecordNotFound
 
 	if err == nil {
 		if m.isUnchanged(existing.Interface(), obj) {
@@ -116,6 +127,13 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 		}
 	}
 
+	if brandNew {
+		log.Infof("A new one!")
+		m.sendEvent("created", id)
+	} else {
+		m.sendEvent("updated", id)
+	}
+
 	return true, m.markUpdated(id, time.Now())
 }
 
@@ -145,6 +163,8 @@ func (m *baseModel) delete(id string) error {
 			return fmt.Errorf("Failed on afterDelete: %s", err)
 		}
 	}
+
+	m.sendEvent("deleted", id)
 
 	return m.markUpdated(id, time.Now())
 }
@@ -315,6 +335,19 @@ func (m *baseModel) sync() error {
 		}
 	}
 
+	if err != nil {
+
+		ts, err := time.Now().MarshalText()
+		if err != nil {
+			return err
+		}
+
+		conn := m.pool.Get()
+		defer conn.Close()
+		_, err = conn.Do("SET", m.idType+"s:synced", ts)
+
+	}
+
 	return err
 }
 
@@ -375,4 +408,10 @@ func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
 	}
 
 	return &manifest, nil
+}
+
+func (m *baseModel) SetEventHandler(handler func(event string, payload interface{}) error) {
+	m.log.Infof("Got handler!", handler)
+	// FIXME: this method should probably be renamed to SetEventSender.
+	m.sendEvent = handler
 }

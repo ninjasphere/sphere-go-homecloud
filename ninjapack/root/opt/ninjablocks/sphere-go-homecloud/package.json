@@ -1,7 +1,7 @@
 {
   "name": "sphere-go-homecloud",
   "version": "0.1.0",
-  "description": "Ninja Sphere - Go HomeCloud",
+  "description": "Ninja Sphere - HomeCloud",
   "main": "sphere-go-homecloud",
   "author": "Elliot Shepherd <elliot@ninjablocks.com",
   "license": "MIT",

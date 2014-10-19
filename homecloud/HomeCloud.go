@@ -71,15 +71,13 @@ func Start(c *ninja.Connection) {
 		Schema: "/service/device-model",
 	})
 
-	channelModel = NewChannelModel(RedisPool, conn)
-	conn.MustExportService(deviceModel, "$home/services/ChannelModel", &model.ServiceAnnouncement{
-		Schema: "/service/channel-model",
-	})
-
 	roomModel = NewRoomModel(RedisPool, conn)
 	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
 		Schema: "/service/room-model",
 	})
+
+	driverModel = NewDriverModel(RedisPool, conn)
+	channelModel = NewChannelModel(RedisPool, conn)
 
 	if config.Bool(false, "clearcloud") {
 		log.Infof("Clearing all cloud data in 5 seconds")
@@ -115,8 +113,6 @@ func Start(c *ninja.Connection) {
 			time.Sleep(time.Minute * 30)
 		}
 	}()
-
-	driverModel = NewDriverModel(RedisPool, conn)
 
 	startManagingDrivers()
 	startManagingDevices()
