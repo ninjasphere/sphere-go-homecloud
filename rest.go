@@ -63,7 +63,7 @@ func (r *RestServer) Listen() {
 	
 	// the following methods are temporary, and will go away at some stage once a real update process is in place
 	m.Post("/rest/tmp/apt/update", func() string {
-		cmd := exec.Command("/usr/bin/nohup", "/bin/sh", "-c", "apt-get update; apt-get dist-upgrade")
+		cmd := exec.Command("/usr/bin/nohup", "/bin/sh", "-c", "apt-get update; apt-get -y dist-upgrade")
 		cmd.SysProcAttr = &syscall.SysProcAttr{}
 		cmd.SysProcAttr.Setpgid = true
 		cmd.Start()
