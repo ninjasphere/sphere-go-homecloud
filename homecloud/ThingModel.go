@@ -84,6 +84,12 @@ func (m *ThingModel) ensureThingForDevice(device *model.Device) error {
 		}
 	}
 
+	// When creating the Thing for a node (like a spheramid) we don't generate a random ID,
+	// but instead use the natural ID (the serial number).
+	if device.NaturalIDType == "node" {
+		thing.ID = device.NaturalID
+	}
+
 	if device.Name != nil {
 		thing.Name = *device.Name
 	}
@@ -224,18 +230,20 @@ func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 		return err
 	}
 
+	if existing.Location == roomID {
+		// Nothing to do
+		return nil
+	}
+
 	err = roomModel.MoveThing(existing.Location, roomID, thingID)
 
 	if err != nil {
 		return fmt.Errorf("Failed to move thing %s from %s to %s", thingID, existing.Location, roomID)
 	}
 
-	if roomID == nil {
-		_, err = conn.Do("HDEL", "thing:"+thingID, "location")
-	} else {
-		_, err = conn.Do("HSET", "thing:"+thingID, "location", *roomID)
-	}
+	existing.Location = roomID
 
+	_, err = m.save(thingID, existing)
 	return err
 }
 

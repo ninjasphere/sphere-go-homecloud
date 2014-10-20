@@ -2,6 +2,9 @@ package main
 
 import (
 	"net/http"
+	
+	"os/exec"
+	"syscall"
 
 	"github.com/go-martini/martini"
 	"github.com/ninjasphere/go-ninja/api"
@@ -57,6 +60,15 @@ func (r *RestServer) Listen() {
 	m.Group("/rest/v1/locations", location.Register)
 	m.Group("/rest/v1/things", thing.Register)
 	m.Group("/rest/v1/rooms", room.Register)
-
+	
+	// the following methods are temporary, and will go away at some stage once a real update process is in place
+	m.Post("/rest/tmp/apt/update", func() string {
+		cmd := exec.Command("/usr/bin/nohup", "/bin/sh", "-c", "apt-get update; apt-get -y dist-upgrade")
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+		cmd.SysProcAttr.Setpgid = true
+		cmd.Start()
+		return "OK"
+	})
+	
 	http.ListenAndServe(":8000", m)
 }

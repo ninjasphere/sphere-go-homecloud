@@ -3,6 +3,7 @@ package homecloud
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"time"
 
@@ -71,15 +72,13 @@ func Start(c *ninja.Connection) {
 		Schema: "/service/device-model",
 	})
 
-	channelModel = NewChannelModel(RedisPool, conn)
-	conn.MustExportService(deviceModel, "$home/services/ChannelModel", &model.ServiceAnnouncement{
-		Schema: "/service/channel-model",
-	})
-
 	roomModel = NewRoomModel(RedisPool, conn)
 	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
 		Schema: "/service/room-model",
 	})
+
+	driverModel = NewDriverModel(RedisPool, conn)
+	channelModel = NewChannelModel(RedisPool, conn)
 
 	if config.Bool(false, "clearcloud") {
 		log.Infof("Clearing all cloud data in 5 seconds")
@@ -92,6 +91,8 @@ func Start(c *ninja.Connection) {
 		roomModel.ClearCloud()
 
 		log.Infof("All cloud data cleared? Probably.")
+
+		os.Exit(0)
 
 		return
 	}
@@ -116,11 +117,11 @@ func Start(c *ninja.Connection) {
 		}
 	}()
 
-	driverModel = NewDriverModel(RedisPool, conn)
-
 	startManagingDrivers()
 	startManagingDevices()
 	startMonitoringLocations()
+
+	ensureNodeDeviceExists()
 
 	go func() {
 		// Give it a chance to sync first...
@@ -136,8 +137,7 @@ func startDrivers() {
 		return conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
 	}
 
-	// for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-blecombined", "driver-go-hue", "driver-go-wemo"} {
-	for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-hue", "driver-go-wemo"} {
+	for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-blecombined", "driver-go-hue", "driver-go-wemo"} {
 		log.Infof("-- (Re)starting '%s'", name)
 
 		err := do(name, "stop")

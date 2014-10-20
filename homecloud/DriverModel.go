@@ -25,6 +25,10 @@ func NewDriverModel(pool *redis.Pool, conn *ninja.Connection) *DriverModel {
 			objType: reflect.TypeOf(model.Module{}),
 			conn:    conn,
 			log:     logger.GetLogger("DriverModel"),
+			sendEvent: func(event string, payload interface{}) error {
+				// Not currently exposed as a service
+				return nil
+			},
 		},
 	}
 }
