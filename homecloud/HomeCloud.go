@@ -136,7 +136,8 @@ func startDrivers() {
 		return conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
 	}
 
-	for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-ble", "driver-go-hue", "driver-go-wemo", "driver-go-flowerpower"} {
+	// for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-blecombined", "driver-go-hue", "driver-go-wemo"} {
+	for _, name := range []string{"driver-go-zigbee", "driver-go-sonos", "driver-go-lifx", "driver-go-hue", "driver-go-wemo"} {
 		log.Infof("-- (Re)starting '%s'", name)
 
 		err := do(name, "stop")
