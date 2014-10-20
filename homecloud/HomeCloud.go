@@ -3,6 +3,7 @@ package homecloud
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"time"
 
@@ -90,6 +91,8 @@ func Start(c *ninja.Connection) {
 		roomModel.ClearCloud()
 
 		log.Infof("All cloud data cleared? Probably.")
+
+		os.Exit(0)
 
 		return
 	}
