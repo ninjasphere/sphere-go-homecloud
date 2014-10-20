@@ -150,6 +150,17 @@ func (m *baseModel) delete(id string) error {
 		return fmt.Errorf("Failed fetching existing %s before delete. error:%s", m.idType, existingErr)
 	}
 
+	if existingErr == RecordNotFound {
+
+		lastUpdated, _ := m.getLastUpdated(id)
+		if lastUpdated == nil {
+			// Hasn't ever existed...
+			return existingErr
+		}
+		// At this point we may have a RecordNotFound, but we may as well delete again anyway, just in case
+		m.log.Infof("%s id:%s appears to be already deleted, but we'll try again anyway.", m.idType, id)
+	}
+
 	conn := m.pool.Get()
 	defer conn.Close()
 

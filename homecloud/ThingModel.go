@@ -169,9 +169,21 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 	return nil
 }
 
-func (m *ThingModel) Delete(id string) error {
+func (m *ThingModel) Delete(id string, deleteDevice bool) error {
 	m.syncing.Wait()
 	//defer m.sync()
+
+	if deleteDevice {
+		deviceID, err := m.getDeviceIDForThing(id)
+
+		if err == nil && deviceID != nil {
+			m.deleteRelationshipWithDevice(*deviceID)
+			err = deviceModel.Delete(*deviceID)
+			if err != nil {
+				m.log.Infof("Failed to delete attached device: %s when removing thing: %s. Continuing. error:%s", deviceID, id, err)
+			}
+		}
+	}
 
 	return m.delete(id)
 }
@@ -187,15 +199,15 @@ func (m *ThingModel) afterDelete(deletedThing *model.Thing) error {
 		err = m.deleteRelationshipWithDevice(*deviceID)
 	}
 
+	if err == RecordNotFound {
+		// The device the deleted thing was attached to no longer exists anyway
+		return nil
+	}
+
 	device, err := deviceModel.Fetch(*deviceID)
 
 	if err != nil && err != RecordNotFound {
 		return err
-	}
-
-	if err == RecordNotFound {
-		// The device the deleted thing was attached to no longer exists anyway
-		return nil
 	}
 
 	// Create a new, unpromoted thing for the device
