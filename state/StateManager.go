@@ -60,7 +60,7 @@ func (sm *NinjaStateManager) Merge(thing *model.Thing) {
 
 			key := fmt.Sprintf("%s-%s", *deviceID, channelModel.ID)
 
-			sm.log.Infof("channel key %s state %v", key, sm.lastStates[key])
+			sm.log.Debugf("channel key %s state %v", key, sm.lastStates[key])
 
 			if val, ok := sm.lastStates[key]; ok {
 				channelModel.LastState = val
