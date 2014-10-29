@@ -25,6 +25,7 @@ var deviceModel *DeviceModel
 var channelModel *ChannelModel
 var roomModel *RoomModel
 var driverModel *DriverModel
+var appModel *AppModel
 
 var locationRegexp = regexp.MustCompile("\\$device\\/([A-F0-9]*)\\/[^\\/]*\\/location")
 
@@ -78,6 +79,7 @@ func Start(c *ninja.Connection) {
 	})
 
 	driverModel = NewDriverModel(RedisPool, conn)
+	appModel = NewAppModel(RedisPool, conn)
 	channelModel = NewChannelModel(RedisPool, conn)
 
 	if config.Bool(false, "clearcloud") {
@@ -118,6 +120,7 @@ func Start(c *ninja.Connection) {
 	}()
 
 	startManagingDrivers()
+	startManagingApps()
 	startManagingDevices()
 	startMonitoringLocations()
 
@@ -127,6 +130,7 @@ func Start(c *ninja.Connection) {
 		// Give it a chance to sync first...
 		time.Sleep(time.Second * 10)
 		startDrivers()
+		startApps()
 	}()
 
 }
@@ -144,6 +148,31 @@ func startDrivers() {
 		/*"driver-go-blecombined", */
 		"driver-go-hue",
 		"driver-go-wemo",
+	} {
+		log.Infof("-- (Re)starting '%s'", name)
+
+		err := do(name, "stop")
+		if err != nil {
+			log.Fatalf("Failed to send %s stop message! %s", name, err)
+		}
+
+		time.Sleep(time.Second * 2)
+
+		err = do(name, "start")
+		if err != nil {
+			log.Fatalf("Failed to send %s start message! %s", name, err)
+		}
+	}
+
+}
+
+func startApps() {
+
+	do := func(name string, task string) error {
+		return conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
+	}
+
+	for _, name := range []string{
 		"app-scheduler",
 	} {
 		log.Infof("-- (Re)starting '%s'", name)
@@ -188,6 +217,38 @@ func startDriver(node string, driverID string, config *string) error {
 				}
 
 				return startDriver(node, driverID, nil)
+			}
+		}
+	}
+
+	return err
+}
+
+func startApp(node string, appID string, config *string) error {
+
+	var rawConfig json.RawMessage
+	if config != nil {
+		rawConfig = []byte(*config)
+	} else {
+		rawConfig = []byte("{}")
+	}
+
+	client := conn.GetServiceClient(fmt.Sprintf("$node/%s/app/%s", node, appID))
+	err := client.Call("start", &rawConfig, nil, 10*time.Second)
+
+	if err != nil {
+		jsonError, ok := err.(*json2.Error)
+		if ok {
+			if jsonError.Code == json2.E_INVALID_REQ {
+
+				err := appModel.DeleteConfig(appID)
+				if err != nil {
+					log.Warningf("App %s could not parse its config. Also, we couldn't clear it! errors:%s and %s", appID, jsonError.Message, err)
+				} else {
+					log.Warningf("App %s could not parse its config, so we cleared it from redis. error:%s", appID, jsonError.Message)
+				}
+
+				return startApp(node, appID, nil)
 			}
 		}
 	}
@@ -253,6 +314,64 @@ func startManagingDrivers() {
 
 }
 
+func startManagingApps() {
+
+	conn.Subscribe("$node/:node/app/:app/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
+
+		node, app := values["node"], values["app"]
+
+		log.Infof("Got app announcement node:%s app:%s", node, app)
+
+		if announcement == nil {
+			log.Warningf("Nil app announcement from node:%s app:%s", node, app)
+			return true
+		}
+
+		module := &model.Module{}
+		err := json.Unmarshal(*announcement, module)
+
+		if announcement == nil {
+			log.Warningf("Could not parse announcement from node:%s app:%s error:%s", node, app, err)
+			return true
+		}
+
+		err = appModel.Create(module)
+		if err != nil {
+			log.Warningf("Failed to save app announcement for %s error:%s", app, err)
+		}
+
+		config, err := appModel.GetConfig(values["app"])
+
+		if err != nil {
+			log.Warningf("Failed to retrieve config for app %s error:%s", app, err)
+		} else {
+			err = startApp(node, app, config)
+			if err != nil {
+				log.Warningf("Failed to start app: %s error:%s", app, err)
+			}
+		}
+
+		return true
+	})
+
+	conn.Subscribe("$node/:node/app/:app/event/config", func(config *json.RawMessage, values map[string]string) bool {
+		log.Infof("Got app config node:%s app:%s config:%s", values["node"], values["app"], *config)
+
+		if config != nil {
+			err := appModel.SetConfig(values["app"], string(*config))
+
+			if err != nil {
+				log.Warningf("Failed to save config for app: %s error: %s", values["app"], err)
+			}
+		} else {
+			log.Infof("Nil config recevied from node:%s app:%s", values["node"], values["app"])
+		}
+
+		return true
+	})
+
+}
+
 func startManagingDevices() {
 
 	conn.Subscribe("$device/:id/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
@@ -262,7 +381,7 @@ func startManagingDevices() {
 		log.Infof("Got device announcement device:%s", id)
 
 		if announcement == nil {
-			log.Warningf("Nil driver announcement from device:%s", id)
+			log.Warningf("Nil device announcement from device:%s", id)
 			return true
 		}
 
