@@ -123,6 +123,7 @@ func Start(c *ninja.Connection) {
 	startManagingApps()
 	startManagingDevices()
 	startMonitoringLocations()
+	startManagingTimeSeries()
 
 	ensureNodeDeviceExists()
 
