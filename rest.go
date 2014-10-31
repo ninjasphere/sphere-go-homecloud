@@ -2,7 +2,7 @@ package main
 
 import (
 	"net/http"
-	
+
 	"os/exec"
 	"syscall"
 
@@ -22,6 +22,7 @@ type RestServer struct {
 	roomModel    *homecloud.RoomModel
 	thingModel   *homecloud.ThingModel
 	deviceModel  *homecloud.DeviceModel
+	siteModel    *homecloud.SiteModel
 	stateManager state.StateManager
 }
 
@@ -39,6 +40,7 @@ func NewRestServer(conn *ninja.Connection) *RestServer {
 		roomModel:    homecloud.NewRoomModel(homecloud.RedisPool, conn),
 		thingModel:   homecloud.NewThingModel(homecloud.RedisPool, conn),
 		deviceModel:  homecloud.NewDeviceModel(homecloud.RedisPool, conn),
+		siteModel:    homecloud.NewSiteModel(homecloud.RedisPool, conn),
 		stateManager: state.NewStateManager(conn),
 	}
 }
@@ -50,17 +52,20 @@ func (r *RestServer) Listen() {
 	m.Map(r.roomModel)
 	m.Map(r.thingModel)
 	m.Map(r.deviceModel)
+	m.Map(r.siteModel)
 	m.Map(r.conn)
 	m.Map(r.stateManager)
 
 	location := routes.NewLocationRouter()
 	thing := routes.NewThingRouter()
 	room := routes.NewRoomRouter()
+	site := routes.NewSiteRouter()
 
 	m.Group("/rest/v1/locations", location.Register)
 	m.Group("/rest/v1/things", thing.Register)
 	m.Group("/rest/v1/rooms", room.Register)
-	
+	m.Group("/rest/v1/sites", site.Register)
+
 	// the following methods are temporary, and will go away at some stage once a real update process is in place
 	m.Post("/rest/tmp/apt/update", func() string {
 		cmd := exec.Command("/usr/bin/nohup", "/bin/sh", "-c", "apt-get update; apt-get -y dist-upgrade")
@@ -69,6 +74,6 @@ func (r *RestServer) Listen() {
 		cmd.Start()
 		return "OK"
 	})
-	
+
 	http.ListenAndServe(":8000", m)
 }

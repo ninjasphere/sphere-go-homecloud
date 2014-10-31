@@ -26,6 +26,7 @@ var channelModel *ChannelModel
 var roomModel *RoomModel
 var driverModel *DriverModel
 var appModel *AppModel
+var siteModel *SiteModel
 
 var locationRegexp = regexp.MustCompile("\\$device\\/([A-F0-9]*)\\/[^\\/]*\\/location")
 
@@ -81,6 +82,7 @@ func Start(c *ninja.Connection) {
 	driverModel = NewDriverModel(RedisPool, conn)
 	appModel = NewAppModel(RedisPool, conn)
 	channelModel = NewChannelModel(RedisPool, conn)
+	siteModel = NewSiteModel(RedisPool, conn)
 
 	if config.Bool(false, "clearcloud") {
 		log.Infof("Clearing all cloud data in 5 seconds")
@@ -126,6 +128,7 @@ func Start(c *ninja.Connection) {
 	startManagingTimeSeries()
 
 	ensureNodeDeviceExists()
+	ensureSiteExists()
 
 	go func() {
 		// Give it a chance to sync first...
@@ -133,6 +136,24 @@ func Start(c *ninja.Connection) {
 		startDrivers()
 		startApps()
 	}()
+
+}
+
+func ensureSiteExists() {
+	site, err := siteModel.Fetch(config.MustString("siteId"))
+	if err != nil && err != RecordNotFound {
+		log.Fatalf("Failed to get site: %s", err)
+	}
+
+	if err == RecordNotFound {
+		site = &model.Site{
+			ID: config.MustString("siteId"),
+		}
+		err = siteModel.Create(site)
+		if err != nil && err != RecordNotFound {
+			log.Fatalf("Failed to create site: %s", err)
+		}
+	}
 
 }
 
