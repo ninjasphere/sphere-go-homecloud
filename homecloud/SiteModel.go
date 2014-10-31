@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os/exec"
 	"reflect"
 	"sync"
 
@@ -111,10 +112,30 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 		oldSite.TimeZoneName = tz.TimeZoneName
 		oldSite.TimeZoneOffset = tz.RawOffset
 		// TODO: Not handling DST
+
+		if tz.TimeZoneID != nil && *tz.TimeZoneID != "" {
+			err = setTimezone(*tz.TimeZoneID)
+			if err != nil {
+				log.Warningf("Failed to set timezone: %s", err)
+			}
+		}
 	}
 
 	if _, err := m.save(id, oldSite); err != nil {
 		return fmt.Errorf("Failed to update site (id:%s): %s", id, err)
+	}
+
+	return nil
+}
+
+func setTimezone(zone string) error {
+	//ln -s /usr/share/zoneinfo/Etc/GMT$offset /etc/localtime
+
+	cmd := exec.Command("ln", "-s", "-f", "/usr/share/zoneinfo/"+zone, "/etc/localtime")
+	_, err := cmd.Output()
+
+	if err != nil {
+		return err
 	}
 
 	return nil
