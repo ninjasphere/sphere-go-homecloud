@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
@@ -21,7 +20,6 @@ type ThingModel struct {
 func toThing(obj interface{}) *model.Thing {
 	var thing, ok = obj.(*model.Thing)
 	if !ok {
-		spew.Dump("BAD THING", obj)
 		panic("Non-'Thing' passed to a ThingModel handler")
 	}
 	return thing
@@ -254,6 +252,12 @@ func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 	}
 
 	existing.Location = roomID
+
+	// TODO: NOT HANDLING TAGS ETC!!!!
+	// If we are moving it into no room, unpromote the device
+	if roomID == nil {
+		existing.Promoted = false
+	}
 
 	_, err = m.save(thingID, existing)
 	return err

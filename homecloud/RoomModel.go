@@ -17,6 +17,14 @@ type RoomModel struct {
 	baseModel
 }
 
+func toRoom(obj interface{}) *model.Room {
+	var thing, ok = obj.(*model.Room)
+	if !ok {
+		panic("Non-'Room' passed to a RoomModel handler")
+	}
+	return thing
+}
+
 func NewRoomModel(pool *redis.Pool, conn *ninja.Connection) *RoomModel {
 	return &RoomModel{
 		baseModel{
@@ -26,6 +34,9 @@ func NewRoomModel(pool *redis.Pool, conn *ninja.Connection) *RoomModel {
 			objType: reflect.TypeOf(model.Room{}),
 			conn:    conn,
 			log:     logger.GetLogger("RoomModel"),
+			afterDelete: func(obj interface{}) error {
+				return roomModel.afterDelete(toRoom(obj))
+			},
 		},
 	}
 }
@@ -79,19 +90,31 @@ func (m *RoomModel) Delete(id string) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
-	err := m.delete(id)
-	if err != nil {
-		return err
-	}
+	return m.delete(id)
+}
+
+func (m *RoomModel) afterDelete(deletedRoom *model.Room) error {
 
 	conn := m.pool.Get()
 	defer conn.Close()
 
-	_, err = conn.Do("DEL", fmt.Sprintf("room:%s:things", id))
+	thingIds, err := redis.Strings(conn.Do("SMEMBERS", fmt.Sprintf("room:%s:things", deletedRoom.ID)))
 
-	// TODO: announce deletion via MQTT
-	// publish(Ninja.topics.room.goodbye.room(roomId)
-	// publish(Ninja.topics.location.calibration.delete, {zone: roomId})
+	for _, id := range thingIds {
+
+		err := thingModel.SetLocation(id, nil)
+
+		if err == RecordNotFound {
+			// We were out of sync, but don't really care...
+			continue
+		}
+		if err != nil {
+			log.Infof("Failed to fetch thing that was in a deleted room. ID: %s error: %s", id, err)
+		}
+
+	}
+
+	_, err = conn.Do("DEL", fmt.Sprintf("room:%s:things", deletedRoom.ID))
 
 	return err
 }
