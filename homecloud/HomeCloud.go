@@ -78,11 +78,14 @@ func Start(c *ninja.Connection) {
 	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
 		Schema: "/service/room-model",
 	})
+	siteModel = NewSiteModel(RedisPool, conn)
+	conn.MustExportService(siteModel, "$home/services/SiteModel", &model.ServiceAnnouncement{
+		Schema: "/service/site-model",
+	})
 
 	driverModel = NewDriverModel(RedisPool, conn)
 	appModel = NewAppModel(RedisPool, conn)
 	channelModel = NewChannelModel(RedisPool, conn)
-	siteModel = NewSiteModel(RedisPool, conn)
 
 	if config.Bool(false, "clearcloud") {
 		log.Infof("Clearing all cloud data in 5 seconds")
