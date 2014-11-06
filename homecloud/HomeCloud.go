@@ -96,6 +96,7 @@ func Start(c *ninja.Connection) {
 		channelModel.ClearCloud()
 		deviceModel.ClearCloud()
 		roomModel.ClearCloud()
+		siteModel.ClearCloud()
 
 		log.Infof("All cloud data cleared? Probably.")
 
@@ -112,11 +113,23 @@ func Start(c *ninja.Connection) {
 			deviceResult := deviceModel.sync()
 			channelResult := channelModel.sync()
 			thingResult := thingModel.sync()
+			siteResult := siteModel.sync()
 
-			log.Infof("Room sync error: %s", roomResult)
-			log.Infof("Device sync error: %s", deviceResult)
-			log.Infof("Channel sync error: %s", channelResult)
-			log.Infof("Thing sync error: %s", thingResult)
+			if roomResult != nil {
+				log.Infof("Room sync error: %s", roomResult)
+			}
+			if deviceResult != nil {
+				log.Infof("Device sync error: %s", deviceResult)
+			}
+			if channelResult != nil {
+				log.Infof("Channel sync error: %s", channelResult)
+			}
+			if thingResult != nil {
+				log.Infof("Thing sync error: %s", thingResult)
+			}
+			if siteResult != nil {
+				log.Infof("Site sync error: %s", siteResult)
+			}
 
 			log.Infof("------ Timed model syncing complete ------\n\n\n")
 
