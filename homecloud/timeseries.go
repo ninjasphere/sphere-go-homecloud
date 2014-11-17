@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/schemas"
 )
 
@@ -18,6 +19,7 @@ type timeSeriesPayload struct {
 	Time       int64                         `json:"time"`
 	TimeZone   string                        `json:"timeZone"`
 	TimeOffset int                           `json:"timeOffset"`
+	Site       string                        `json:"site"`
 }
 
 func startManagingTimeSeries() {
@@ -68,6 +70,7 @@ func startManagingTimeSeries() {
 				Event:     "state",
 				Points:    points,
 				Time:      time.Now().UnixNano() / int64(time.Millisecond),
+				Site:      config.MustString("siteId"),
 			}
 
 			payload.TimeZone, payload.TimeOffset = time.Now().Zone()
