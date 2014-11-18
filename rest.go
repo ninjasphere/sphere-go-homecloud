@@ -7,6 +7,7 @@ import (
 	"syscall"
 
 	"github.com/go-martini/martini"
+	"github.com/martini-contrib/cors"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
@@ -48,6 +49,10 @@ func NewRestServer(conn *ninja.Connection) *RestServer {
 func (r *RestServer) Listen() {
 
 	m := martini.Classic()
+
+	m.Use(cors.Allow(&cors.Options{
+		AllowAllOrigins: true,
+	}))
 
 	m.Map(r.roomModel)
 	m.Map(r.thingModel)
