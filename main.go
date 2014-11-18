@@ -20,7 +20,7 @@ func main() {
 		log.Fatalf("Failed to connect to sphere: %s", err)
 	}
 
-	NewWebsocketServer(conn)
+	go NewWebsocketServer(conn)
 
 	homecloud.Start(conn)
 
