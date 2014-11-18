@@ -20,6 +20,8 @@ func main() {
 		log.Fatalf("Failed to connect to sphere: %s", err)
 	}
 
+	NewWebsocketServer(conn)
+
 	homecloud.Start(conn)
 
 	restServer := NewRestServer(conn) // TODO: Should we reuse the persistance layer from homecloud?
