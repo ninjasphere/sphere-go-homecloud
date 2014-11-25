@@ -153,6 +153,14 @@ func Start(c *ninja.Connection) {
 		startApps()
 	}()
 
+	ledController := conn.GetServiceClient("$node/" + config.Serial() + "/led-controller")
+	go func() {
+		for {
+			ledController.Call("enableControl", nil, nil, 0)
+			time.Sleep(time.Second * 5)
+		}
+	}()
+
 }
 
 func ensureSiteExists() {
