@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"git.eclipse.org/gitroot/paho/org.eclipse.paho.mqtt.golang.git"
 	"github.com/gorilla/websocket"
 	"github.com/ninjasphere/go-ninja/api"
 )
@@ -58,7 +57,7 @@ func NewWebsocketServer(conn *ninja.Connection) {
 
 				log.Debugf("Incoming ws message: %s to %s", p, topic)
 
-				conn.GetMqttClient().Publish(mqtt.QoS(0), topic, p)
+				conn.GetMqttClient().Publish(topic, p)
 
 				if err != nil {
 					log.Errorf("Websocket failed publishing message to mqtt: %s", err)

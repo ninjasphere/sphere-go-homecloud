@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"time"
 
-	"git.eclipse.org/gitroot/paho/org.eclipse.paho.mqtt.golang.git"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -478,19 +477,14 @@ func startManagingDevices() {
 
 func startMonitoringLocations() {
 
-	filter, err := mqtt.NewTopicFilter("$device/+/+/location", 0)
-	if err != nil {
-		log.FatalError(err, "Failed to subscribe to device locations")
-	}
+	_, err := conn.GetMqttClient().Subscribe("$device/+/+/location", func(topic string, payload []byte) {
 
-	receipt, err := conn.GetMqttClient().StartSubscription(func(_ *mqtt.MqttClient, message mqtt.Message) {
-
-		deviceID := locationRegexp.FindAllStringSubmatch(message.Topic(), -1)[0][1]
+		deviceID := locationRegexp.FindAllStringSubmatch(topic, -1)[0][1]
 
 		update := &incomingLocationUpdate{}
-		err := json.Unmarshal(message.Payload(), update)
+		err := json.Unmarshal(payload, update)
 		if err != nil {
-			log.Errorf("Failed to parse location update %s to %s : %s", message.Payload(), message.Topic(), err)
+			log.Errorf("Failed to parse location update %s to %s : %s", payload, topic, err)
 			return
 		}
 
@@ -534,8 +528,7 @@ func startMonitoringLocations() {
 						// XXX: TODO: Remove me once the cloud room model is sync'd and locatino service uses it
 						log.Infof("Unknown room %s. Advising remote location service to forget it.", *update.Zone)
 
-						pubReceipt := conn.GetMqttClient().Publish(mqtt.QoS(0), "$location/delete", message.Payload())
-						<-pubReceipt
+						conn.GetMqttClient().Publish("$location/delete", payload)
 					}
 				}
 			}
@@ -547,16 +540,14 @@ func startMonitoringLocations() {
 				HasChanged: hasChangedZone,
 			})
 
-			pubReceipt := conn.GetMqttClient().Publish(mqtt.QoS(0), topic, payload)
-			<-pubReceipt
+			conn.GetMqttClient().Publish(topic, payload)
 
 		}
 
-	}, filter)
+	})
 
 	if err != nil {
 		log.Fatalf("Failed to subscribe to device locations: %s", err)
 	}
 
-	<-receipt
 }
