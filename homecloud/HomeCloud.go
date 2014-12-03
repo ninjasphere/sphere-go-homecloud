@@ -169,8 +169,10 @@ func ensureSiteExists() {
 	}
 
 	if err == RecordNotFound {
+		siteType := "home"
 		site = &model.Site{
-			ID: config.MustString("siteId"),
+			ID:   config.MustString("siteId"),
+			Type: &siteType,
 		}
 		err = siteModel.Create(site)
 		if err != nil && err != RecordNotFound {
