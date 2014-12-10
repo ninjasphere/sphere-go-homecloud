@@ -147,7 +147,7 @@ func Start(c *ninja.Connection) {
 
 	go func() {
 		// Give it a chance to sync first...
-		time.Sleep(time.Second * 10)
+		time.Sleep(time.Second * 20)
 		startDrivers()
 		startApps()
 	}()
