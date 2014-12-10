@@ -203,7 +203,7 @@ func startDrivers() {
 			log.Fatalf("Failed to send %s stop message! %s", name, err)
 		}
 
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * 10)
 
 		err = do(name, "start")
 		if err != nil {
