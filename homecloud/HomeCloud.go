@@ -190,11 +190,12 @@ func startDrivers() {
 
 	for _, name := range []string{
 		"driver-go-zigbee",
+		"driver-go-hue",
 		"driver-go-sonos",
+		"driver-go-chromecast",
+		"driver-go-wemo",
 		"driver-go-lifx",
 		/*"driver-go-blecombined", */
-		"driver-go-hue",
-		"driver-go-wemo",
 	} {
 		log.Infof("-- (Re)starting '%s'", name)
 
