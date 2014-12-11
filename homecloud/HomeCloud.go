@@ -1,9 +1,6 @@
 package homecloud
 
 import (
-	"encoding/json"
-	"fmt"
-	"os"
 	"regexp"
 	"time"
 
@@ -11,21 +8,143 @@ import (
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
-	"github.com/ninjasphere/go-ninja/rpc/json2"
 	"github.com/ninjasphere/redigo/redis"
+	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
 var log = logger.GetLogger("HomeCloud")
 
-var conn *ninja.Connection
+type HomeCloud struct {
+	Conn         *ninja.Connection    `inject:""`
+	Pool         *redis.Pool          `inject:""`
+	ThingModel   *models.ThingModel   `inject:""`
+	DeviceModel  *models.DeviceModel  `inject:""`
+	ChannelModel *models.ChannelModel `inject:""`
+	RoomModel    *models.RoomModel    `inject:""`
+	DriverModel  *models.DriverModel  `inject:""`
+	AppModel     *models.AppModel     `inject:""`
+	SiteModel    *models.SiteModel    `inject:""`
+	log          *logger.Logger
+}
 
-var thingModel *ThingModel
-var deviceModel *DeviceModel
-var channelModel *ChannelModel
-var roomModel *RoomModel
-var driverModel *DriverModel
-var appModel *AppModel
-var siteModel *SiteModel
+func (c *HomeCloud) PostConstruct() error {
+
+	c.log = logger.GetLogger("HomeCloud")
+
+	// We wait for at least one sync to happen, or fail
+	<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
+
+	return nil
+}
+
+// if config.Bool(false, "clearcloud") {
+
+func (c *HomeCloud) ClearCloud() {
+	log.Infof("Clearing all cloud data in 5 seconds")
+
+	time.Sleep(time.Second * 5)
+
+	c.ThingModel.ClearCloud()
+	c.ChannelModel.ClearCloud()
+	c.DeviceModel.ClearCloud()
+	c.RoomModel.ClearCloud()
+	c.SiteModel.ClearCloud()
+
+	log.Infof("All cloud data cleared? Probably.")
+}
+
+func (c *HomeCloud) ExportRPCServices() {
+	c.Conn.MustExportService(c.ThingModel, "$home/services/ThingModel", &model.ServiceAnnouncement{
+		Schema: "/service/thing-model",
+	})
+	c.Conn.MustExportService(c.DeviceModel, "$home/services/DeviceModel", &model.ServiceAnnouncement{
+		Schema: "/service/device-model",
+	})
+	c.Conn.MustExportService(c.RoomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
+		Schema: "/service/room-model",
+	})
+	c.Conn.MustExportService(c.SiteModel, "$home/services/SiteModel", &model.ServiceAnnouncement{
+		Schema: "/service/site-model",
+	})
+}
+
+func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
+
+	syncComplete := make(chan bool)
+
+	go func() {
+		for {
+
+			log.Infof("\n\n\n------ Timed model syncing started (every %s) ------ ", interval.String())
+
+			roomResult := c.RoomModel.Sync()
+			deviceResult := c.DeviceModel.Sync()
+			channelResult := c.ChannelModel.Sync()
+			thingResult := c.ThingModel.Sync()
+			siteResult := c.SiteModel.Sync()
+
+			success := true
+
+			if roomResult != nil {
+				log.Infof("Room sync error: %s", roomResult)
+				success = false
+			}
+			if deviceResult != nil {
+				log.Infof("Device sync error: %s", deviceResult)
+				success = false
+			}
+			if channelResult != nil {
+				log.Infof("Channel sync error: %s", channelResult)
+				success = false
+			}
+			if thingResult != nil {
+				log.Infof("Thing sync error: %s", thingResult)
+				success = false
+			}
+			if siteResult != nil {
+				log.Infof("Site sync error: %s", siteResult)
+				success = false
+			}
+
+			log.Infof("------ Timed model syncing complete ------\n\n\n")
+
+			select {
+			case syncComplete <- success:
+			default:
+			}
+
+			time.Sleep(interval)
+		}
+	}()
+
+	return syncComplete
+}
+
+func (c *HomeCloud) AutoStartModules() {
+
+	do := func(name string, task string) error {
+		return c.Conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
+	}
+
+	interval := config.MustDuration("homecloud.autoStart.duration")
+
+	for _, name := range config.MustStringArray("homecloud.autoStart.modules") {
+		log.Infof("-- (Re)starting '%s'", name)
+
+		err := do(name, "stop")
+		if err != nil {
+			log.Fatalf("Failed to send %s stop message! %s", name, err)
+		}
+
+		time.Sleep(interval)
+
+		err = do(name, "start")
+		if err != nil {
+			log.Fatalf("Failed to send %s start message! %s", name, err)
+		}
+	}
+
+}
 
 var locationRegexp = regexp.MustCompile("\\$device\\/([A-F0-9]*)\\/[^\\/]*\\/location")
 
@@ -38,103 +157,8 @@ type outgoingLocationUpdate struct {
 	HasChanged bool    `json:"hasChanged"`
 }
 
-var RedisPool = &redis.Pool{
-	MaxIdle:     3,
-	IdleTimeout: 240 * time.Second,
-	Dial: func() (redis.Conn, error) {
-		c, err := redis.Dial("tcp", ":6379")
-		if err != nil {
-			return nil, err
-		}
-		/*if _, err := c.Do("AUTH", password); err != nil {
-			c.Close()
-			return nil, err
-		}*/
-		return c, err
-	},
-	TestOnBorrow: func(c redis.Conn, t time.Time) error {
-		_, err := c.Do("PING")
-		return err
-	},
-}
-
+/*
 func Start(c *ninja.Connection) {
-
-	//FIXME
-	conn = c
-
-	thingModel = NewThingModel(RedisPool, conn)
-	conn.MustExportService(thingModel, "$home/services/ThingModel", &model.ServiceAnnouncement{
-		Schema: "/service/thing-model",
-	})
-
-	deviceModel = NewDeviceModel(RedisPool, conn)
-	conn.MustExportService(deviceModel, "$home/services/DeviceModel", &model.ServiceAnnouncement{
-		Schema: "/service/device-model",
-	})
-
-	roomModel = NewRoomModel(RedisPool, conn)
-	conn.MustExportService(roomModel, "$home/services/RoomModel", &model.ServiceAnnouncement{
-		Schema: "/service/room-model",
-	})
-	siteModel = NewSiteModel(RedisPool, conn)
-	conn.MustExportService(siteModel, "$home/services/SiteModel", &model.ServiceAnnouncement{
-		Schema: "/service/site-model",
-	})
-
-	driverModel = NewDriverModel(RedisPool, conn)
-	appModel = NewAppModel(RedisPool, conn)
-	channelModel = NewChannelModel(RedisPool, conn)
-
-	if config.Bool(false, "clearcloud") {
-		log.Infof("Clearing all cloud data in 5 seconds")
-
-		time.Sleep(time.Second * 5)
-
-		thingModel.ClearCloud()
-		channelModel.ClearCloud()
-		deviceModel.ClearCloud()
-		roomModel.ClearCloud()
-		siteModel.ClearCloud()
-
-		log.Infof("All cloud data cleared? Probably.")
-
-		os.Exit(0)
-
-		return
-	}
-
-	go func() {
-		for {
-			log.Infof("\n\n\n------ Timed model syncing started (every 30 min) ------ ")
-
-			roomResult := roomModel.sync()
-			deviceResult := deviceModel.sync()
-			channelResult := channelModel.sync()
-			thingResult := thingModel.sync()
-			siteResult := siteModel.sync()
-
-			if roomResult != nil {
-				log.Infof("Room sync error: %s", roomResult)
-			}
-			if deviceResult != nil {
-				log.Infof("Device sync error: %s", deviceResult)
-			}
-			if channelResult != nil {
-				log.Infof("Channel sync error: %s", channelResult)
-			}
-			if thingResult != nil {
-				log.Infof("Thing sync error: %s", thingResult)
-			}
-			if siteResult != nil {
-				log.Infof("Site sync error: %s", siteResult)
-			}
-
-			log.Infof("------ Timed model syncing complete ------\n\n\n")
-
-			time.Sleep(time.Minute * 30)
-		}
-	}()
 
 	startManagingDrivers()
 	startManagingApps()
@@ -148,7 +172,7 @@ func Start(c *ninja.Connection) {
 	go func() {
 		// Give it a chance to sync first...
 		time.Sleep(time.Second * 20)
-		startDrivers()
+		//startDrivers()
 		startApps()
 	}()
 
@@ -177,64 +201,6 @@ func ensureSiteExists() {
 		err = siteModel.Create(site)
 		if err != nil && err != RecordNotFound {
 			log.Fatalf("Failed to create site: %s", err)
-		}
-	}
-
-}
-
-func startDrivers() {
-
-	do := func(name string, task string) error {
-		return conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
-	}
-
-	for _, name := range []string{
-		"driver-go-zigbee",
-		"driver-go-hue",
-		"driver-go-sonos",
-		"driver-go-chromecast",
-		"driver-go-wemo",
-		"driver-go-lifx",
-		/*"driver-go-blecombined", */
-	} {
-		log.Infof("-- (Re)starting '%s'", name)
-
-		err := do(name, "stop")
-		if err != nil {
-			log.Fatalf("Failed to send %s stop message! %s", name, err)
-		}
-
-		time.Sleep(time.Second * 10)
-
-		err = do(name, "start")
-		if err != nil {
-			log.Fatalf("Failed to send %s start message! %s", name, err)
-		}
-	}
-
-}
-
-func startApps() {
-
-	do := func(name string, task string) error {
-		return conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
-	}
-
-	for _, name := range []string{
-		"app-scheduler",
-	} {
-		log.Infof("-- (Re)starting '%s'", name)
-
-		err := do(name, "stop")
-		if err != nil {
-			log.Fatalf("Failed to send %s stop message! %s", name, err)
-		}
-
-		time.Sleep(time.Second * 2)
-
-		err = do(name, "start")
-		if err != nil {
-			log.Fatalf("Failed to send %s start message! %s", name, err)
 		}
 	}
 
@@ -554,3 +520,4 @@ func startMonitoringLocations() {
 	}
 
 }
+*/

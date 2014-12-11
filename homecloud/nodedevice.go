@@ -1,11 +1,6 @@
 package homecloud
 
-import (
-	"github.com/ninjasphere/go-ninja/api"
-	"github.com/ninjasphere/go-ninja/config"
-	"github.com/ninjasphere/go-ninja/model"
-)
-
+/*
 // TODO: This won't work with multiple spheres connected to this homecloud.
 func ensureNodeDeviceExists() {
 	exists, err := thingModel.Exists(config.Serial())

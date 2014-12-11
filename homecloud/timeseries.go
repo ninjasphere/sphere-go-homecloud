@@ -1,12 +1,6 @@
 package homecloud
 
-import (
-	"encoding/json"
-	"time"
-
-	"github.com/ninjasphere/go-ninja/config"
-	"github.com/ninjasphere/go-ninja/schemas"
-)
+import "github.com/ninjasphere/go-ninja/schemas"
 
 type timeSeriesPayload struct {
 	Thing      string                        `json:"thing"`
@@ -22,6 +16,7 @@ type timeSeriesPayload struct {
 	Site       string                        `json:"site"`
 }
 
+/*
 func startManagingTimeSeries() {
 	err := conn.GetServiceClient("$device/:device/channel/:channel").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
 
@@ -87,4 +82,4 @@ func startManagingTimeSeries() {
 	if err != nil {
 		log.FatalError(err, "Failed to register for state events in the time series manager.")
 	}
-}
+}*/
