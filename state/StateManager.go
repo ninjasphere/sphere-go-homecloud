@@ -28,21 +28,21 @@ type StateManager interface {
 type NinjaStateManager struct {
 	sync.Mutex
 	log        *logger.Logger
-	conn       *ninja.Connection
+	Conn       *ninja.Connection `inject:""`
 	lastStates map[string]*LastState
 }
 
-func NewStateManager(conn *ninja.Connection) StateManager {
+func NewStateManager() StateManager {
 
-	sm := &NinjaStateManager{
+	return &NinjaStateManager{
 		lastStates: make(map[string]*LastState),
-		conn:       conn,
 		log:        logger.GetLogger("sphere-go-homecloud-state"),
 	}
+}
 
+func (sm *NinjaStateManager) PostConstruct() error {
 	go sm.startListener()
-
-	return sm
+	return nil
 }
 
 func (sm *NinjaStateManager) Merge(thing *model.Thing) {
@@ -80,7 +80,7 @@ func (sm *NinjaStateManager) startListener() {
 
 	sm.log.Infof("startListener")
 
-	err := sm.conn.GetServiceClient("$device/:deviceid/channel/:channelid").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
+	err := sm.Conn.GetServiceClient("$device/:deviceid/channel/:channelid").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
 
 		var data interface{}
 
