@@ -162,7 +162,7 @@ func (c *HomeCloud) AutoStartModules() {
 		return c.Conn.SendNotification("$node/"+config.Serial()+"/module/"+task, name)
 	}
 
-	interval := config.MustDuration("homecloud.autoStart.duration")
+	interval := config.MustDuration("homecloud.autoStart.interval")
 
 	for _, name := range config.MustStringArray("homecloud.autoStart.modules") {
 		log.Infof("-- (Re)starting '%s'", name)
