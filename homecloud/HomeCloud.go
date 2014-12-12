@@ -32,6 +32,8 @@ func (c *HomeCloud) PostConstruct() error {
 	c.log = logger.GetLogger("HomeCloud")
 
 	c.ExportRPCServices()
+	c.exportNodeDevice()
+	c.ensureSiteExists()
 
 	// \/ \/ This is terrible \/ \/
 	ledController := c.Conn.GetServiceClient("$node/" + config.Serial() + "/led-controller")
@@ -50,8 +52,7 @@ func (c *HomeCloud) PostConstruct() error {
 	// We wait for at least one sync to happen, or fail
 	<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
 
-	// Ensure we have our site in the model
-	c.ensureSiteExists()
+	c.AutoStartModules()
 
 	return nil
 }
@@ -154,6 +155,16 @@ func (c *HomeCloud) ensureSiteExists() {
 		}
 	}
 
+}
+
+func (c *HomeCloud) exportNodeDevice() {
+
+	device := &NodeDevice{ninja.LoadModuleInfo("./package.json")}
+
+	err := c.Conn.ExportDevice(device)
+	if err != nil {
+		log.Errorf("Failed to export node device: %s", err)
+	}
 }
 
 func (c *HomeCloud) AutoStartModules() {
