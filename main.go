@@ -24,9 +24,25 @@ type postConstructable interface {
 	PostConstruct() error
 }
 
+const shortForm = "2006-Jan-02"
+
+var epoch, _ = time.Parse(shortForm, "2014-Dec-01")
+
+func waitForNTP() {
+	for {
+		if time.Now().After(epoch) {
+			break
+		}
+
+		time.Sleep(time.Second * 2)
+	}
+}
+
 func main() {
 
 	log.Infof("Welcome home, Ninja.")
+
+	waitForNTP()
 
 	conn, err := ninja.Connect("sphere-go-homecloud")
 	if err != nil {
