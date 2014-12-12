@@ -2,6 +2,7 @@ package homecloud
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -18,7 +19,23 @@ type DeviceManager struct {
 
 func (m *DeviceManager) PostConstruct() error {
 	m.log = logger.GetLogger("DeviceManager")
-	return m.Start()
+	err := m.Start()
+	if err != nil {
+		return err
+	}
+	m.exportNodeDevice()
+	return nil
+}
+
+func (m *DeviceManager) exportNodeDevice() error {
+
+	device := &NodeDevice{ninja.LoadModuleInfo("./package.json")}
+
+	err := m.Conn.ExportDevice(device)
+	if err != nil {
+		return fmt.Errorf("Failed to export node device: %s", err)
+	}
+	return nil
 }
 
 func (m *DeviceManager) Start() error {

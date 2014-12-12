@@ -32,7 +32,6 @@ func (c *HomeCloud) PostConstruct() error {
 	c.log = logger.GetLogger("HomeCloud")
 
 	c.ExportRPCServices()
-	c.exportNodeDevice()
 	c.ensureSiteExists()
 
 	// \/ \/ This is terrible \/ \/
@@ -155,16 +154,6 @@ func (c *HomeCloud) ensureSiteExists() {
 		}
 	}
 
-}
-
-func (c *HomeCloud) exportNodeDevice() {
-
-	device := &NodeDevice{ninja.LoadModuleInfo("./package.json")}
-
-	err := c.Conn.ExportDevice(device)
-	if err != nil {
-		log.Errorf("Failed to export node device: %s", err)
-	}
 }
 
 func (c *HomeCloud) AutoStartModules() {
