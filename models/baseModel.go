@@ -265,7 +265,7 @@ type SyncReply struct {
 	PushedObjects    SyncDataSet              `json:"pushedObjects"`
 }
 
-func (m *baseModel) Sync() error {
+func (m *baseModel) Sync(timeout time.Duration) error {
 	m.syncing.Wait()
 	m.syncing.Add(1)
 	defer m.syncing.Done()
@@ -282,7 +282,7 @@ func (m *baseModel) Sync() error {
 	m.log.Debugf("sync: Sending %d %s local update times", len(*manifest), m.idType)
 
 	calcClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
-	err = calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, time.Second*20)
+	err = calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, timeout)
 
 	if err != nil {
 		return fmt.Errorf("Failed calling calculate_sync_items for model %s error:%s", m.idType, err)
@@ -327,7 +327,7 @@ func (m *baseModel) Sync() error {
 
 	var syncReply SyncReply
 
-	err = syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, time.Second*20)
+	err = syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, timeout)
 
 	if err != nil {
 		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)

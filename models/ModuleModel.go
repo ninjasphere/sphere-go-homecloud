@@ -5,15 +5,15 @@ import (
 	"github.com/ninjasphere/redigo/redis"
 )
 
-// TODO: Sync driver config
+// TODO: Sync module config
 
-type DriverModel struct {
+type ModuleModel struct {
 	baseModel
 }
 
-func NewDriverModel() *DriverModel {
-	model := &DriverModel{
-		baseModel: newBaseModel("driver", model.Module{}),
+func NewModuleModel() *ModuleModel {
+	model := &ModuleModel{
+		baseModel: newBaseModel("module", model.Module{}),
 	}
 	model.sendEvent = func(event string, payload interface{}) error {
 		// Not currently exposed as a service
@@ -22,7 +22,7 @@ func NewDriverModel() *DriverModel {
 	return model
 }
 
-func (m *DriverModel) Fetch(id string) (*model.Module, error) {
+func (m *ModuleModel) Fetch(id string) (*model.Module, error) {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -35,7 +35,7 @@ func (m *DriverModel) Fetch(id string) (*model.Module, error) {
 	return module, nil
 }
 
-func (m *DriverModel) Create(module *model.Module) error {
+func (m *ModuleModel) Create(module *model.Module) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -43,16 +43,16 @@ func (m *DriverModel) Create(module *model.Module) error {
 	return err
 }
 
-func (m *DriverModel) GetConfig(driverID string) (*string, error) {
+func (m *ModuleModel) GetConfig(moduleID string) (*string, error) {
 	m.syncing.Wait()
 
 	conn := m.Pool.Get()
 	defer conn.Close()
 
-	exists, err := redis.Bool(conn.Do("HEXISTS", "driver:"+driverID, "config"))
+	exists, err := redis.Bool(conn.Do("HEXISTS", "module:"+moduleID, "config"))
 
 	if exists {
-		item, err := conn.Do("HGET", "driver:"+driverID, "config")
+		item, err := conn.Do("HGET", "module:"+moduleID, "config")
 		config, err := redis.String(item, err)
 		return &config, err
 	}
@@ -60,7 +60,7 @@ func (m *DriverModel) GetConfig(driverID string) (*string, error) {
 	return nil, err
 }
 
-func (m *DriverModel) Delete(id string) error {
+func (m *ModuleModel) Delete(id string) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -72,24 +72,24 @@ func (m *DriverModel) Delete(id string) error {
 	return m.DeleteConfig(id)
 }
 
-func (m *DriverModel) SetConfig(driverID string, config string) error {
+func (m *ModuleModel) SetConfig(moduleID string, config string) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
 	conn := m.Pool.Get()
 	defer conn.Close()
 
-	_, err := conn.Do("HSET", "driver:"+driverID, "config", config)
+	_, err := conn.Do("HSET", "module:"+moduleID, "config", config)
 	return err
 }
 
-func (m *DriverModel) DeleteConfig(driverID string) error {
+func (m *ModuleModel) DeleteConfig(moduleID string) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
 	conn := m.Pool.Get()
 	defer conn.Close()
 
-	_, err := conn.Do("HDEL", "driver:"+driverID, "config")
+	_, err := conn.Do("HDEL", "module:"+moduleID, "config")
 	return err
 }

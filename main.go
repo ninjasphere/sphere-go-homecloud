@@ -2,14 +2,13 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"os/signal"
 	"reflect"
 	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
+	"github.com/ninjasphere/go-ninja/support"
 	"github.com/ninjasphere/inject"
 	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/homecloud"
@@ -44,11 +43,13 @@ func main() {
 
 	waitForNTP()
 
+	// The MQTT Connection
 	conn, err := ninja.Connect("sphere-go-homecloud")
 	if err != nil {
 		log.Fatalf("Failed to connect to sphere: %s", err)
 	}
 
+	// Our redis pool
 	pool := &redis.Pool{
 		MaxIdle:     config.MustInt("homecloud.redis.maxIdle"),
 		IdleTimeout: config.MustDuration("homecloud.redis.idleTimeout"),
@@ -65,10 +66,11 @@ func main() {
 		},
 	}
 
+	// Build the object graph using dependency injection
 	injectables := []interface{}{}
 
 	injectables = append(injectables, pool, conn)
-	injectables = append(injectables, &homecloud.HomeCloud{})
+	injectables = append(injectables, &homecloud.HomeCloud{}, &homecloud.TimeSeriesManager{})
 	injectables = append(injectables, state.NewStateManager())
 	injectables = append(injectables, &rest.RestServer{}, &homecloud.WebsocketServer{})
 	injectables = append(injectables, models.GetInjectables()...)
@@ -79,6 +81,7 @@ func main() {
 		log.Fatalf("Failed to construct the object graph: %s", err)
 	}
 
+	// Run PostConstruct on any objects that have it
 	for _, node := range injectables {
 		if n, ok := node.(postConstructable); ok {
 			go func(c postConstructable) {
@@ -88,16 +91,7 @@ func main() {
 			}(n)
 		}
 	}
-	/*go NewWebsocketServer(conn)
 
-	homecloud.Start(conn)
-
-	restServer := NewRestServer(conn) // TODO: Should we reuse the persistance layer from homecloud?
-
-	go restServer.Listen()*/
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, os.Kill)
-	log.Infof("Got signal: %v", <-sig)
-
+	support.WaitUntilSignal()
+	// So long, and thanks for all the fish.
 }

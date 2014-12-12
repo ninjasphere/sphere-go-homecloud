@@ -1,6 +1,22 @@
 package homecloud
 
-import "github.com/ninjasphere/go-ninja/schemas"
+import (
+	"encoding/json"
+	"time"
+
+	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/config"
+	"github.com/ninjasphere/go-ninja/logger"
+	"github.com/ninjasphere/go-ninja/schemas"
+	"github.com/ninjasphere/sphere-go-homecloud/models"
+)
+
+type TimeSeriesManager struct {
+	Conn         *ninja.Connection    `inject:""`
+	ThingModel   *models.ThingModel   `inject:""`
+	ChannelModel *models.ChannelModel `inject:""`
+	log          *logger.Logger
+}
 
 type timeSeriesPayload struct {
 	Thing      string                        `json:"thing"`
@@ -16,11 +32,18 @@ type timeSeriesPayload struct {
 	Site       string                        `json:"site"`
 }
 
-/*
-func startManagingTimeSeries() {
-	err := conn.GetServiceClient("$device/:device/channel/:channel").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
+func (m *TimeSeriesManager) PostConstruct() error {
+	m.log = logger.GetLogger("TimeSeriesManager")
+	return m.Start()
+}
 
-		thing, err := thingModel.FetchByDeviceId(values["device"])
+func (m *TimeSeriesManager) Start() error {
+
+	m.log.Infof("Starting")
+
+	err := m.Conn.GetServiceClient("$device/:device/channel/:channel").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
+
+		thing, err := m.ThingModel.FetchByDeviceId(values["device"])
 		if err != nil {
 			log.Errorf("Got a state event, but failed to fetch thing for device: %s error: %s", values["device"], err)
 			return true
@@ -30,7 +53,7 @@ func startManagingTimeSeries() {
 			return true
 		}
 
-		channel, err := channelModel.Fetch(values["device"], values["channel"])
+		channel, err := m.ChannelModel.Fetch(values["device"], values["channel"])
 
 		if err != nil {
 			log.Errorf("Got a state event, but failed to fetch channel: %s on device: %s error: %s", values["channel"], values["device"], err)
@@ -70,7 +93,7 @@ func startManagingTimeSeries() {
 
 			payload.TimeZone, payload.TimeOffset = time.Now().Zone()
 
-			err = conn.SendNotification("$ninja/services/timeseries", payload)
+			err = m.Conn.SendNotification("$ninja/services/timeseries", payload)
 			if err != nil {
 				log.Fatalf("Got a state event, but failed to send time series points. channel: %s on device: %s error: %s", values["channel"], values["device"], err)
 			}
@@ -79,7 +102,5 @@ func startManagingTimeSeries() {
 		return true
 	})
 
-	if err != nil {
-		log.FatalError(err, "Failed to register for state events in the time series manager.")
-	}
-}*/
+	return err
+}
