@@ -144,7 +144,9 @@ func (c *HomeCloud) ensureSiteExists() {
 
 	if err == models.RecordNotFound {
 		siteType := "home"
+		name := "Home"
 		site = &model.Site{
+			Name: &name,
 			ID:   config.MustString("siteId"),
 			Type: &siteType,
 		}
