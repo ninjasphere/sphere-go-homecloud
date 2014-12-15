@@ -323,11 +323,38 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 		requestedData[id] = SyncObject{obj, lastUpdated.UnixNano() / int64(time.Millisecond)}
 	}
 
+	m.log.Infof("syncing cloud to local db")
+
+	err = m.syncDataFromCloudToLocal(&requestedData, requestIds, timeout)
+
+	if err != nil {
+		return err
+	}
+
+	ts, err := time.Now().MarshalText()
+	if err != nil {
+		return err
+	}
+
+	conn := m.Pool.Get()
+	defer conn.Close()
+	_, err = conn.Do("SET", m.idType+"s:synced", ts)
+
+	return err
+}
+
+func (m *baseModel) syncDataFromCloudToLocal(requestedData *SyncDataSet, requestIds []string, timeout time.Duration) error {
+
+	if !SyncFromCloud {
+		//		m.log.Warningf
+		return fmt.Errorf("Syncing data FROM cloud is disabled!!")
+	}
+
 	syncClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
 
 	var syncReply SyncReply
 
-	err = syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, timeout)
+	err := syncClient.Call("modelstore.do_sync_items", []interface{}{m.idType, requestedData, requestIds}, &syncReply, timeout)
 
 	if err != nil {
 		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)
@@ -335,6 +362,8 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 
 	for id, requestedObj := range syncReply.RequestedObjects {
 		obj := reflect.New(m.objType).Interface()
+
+		m.log.Infof("type %T payload %s", obj, string(requestedObj.Data))
 
 		err := json.Unmarshal(requestedObj.Data, obj)
 		if err != nil {
@@ -359,19 +388,6 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 		if err != nil {
 			m.log.Warningf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
 		}
-	}
-
-	if err != nil {
-
-		ts, err := time.Now().MarshalText()
-		if err != nil {
-			return err
-		}
-
-		conn := m.Pool.Get()
-		defer conn.Close()
-		_, err = conn.Do("SET", m.idType+"s:synced", ts)
-
 	}
 
 	return err
