@@ -15,6 +15,9 @@ import (
 
 var log = logger.GetLogger("HomeCloud")
 
+var enableSync = config.Bool(true, "homecloud.sync.enabled")
+var enableSyncFromCloud = config.Bool(false, "homecloud.sync.fromCloud")
+
 type HomeCloud struct {
 	Conn         *ninja.Connection    `inject:""`
 	Pool         *redis.Pool          `inject:""`
@@ -48,8 +51,10 @@ func (c *HomeCloud) PostConstruct() error {
 		}
 	}()
 
-	// We wait for at least one sync to happen, or fail
-	<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
+	if enableSync {
+		// We wait for at least one sync to happen, or fail
+		<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
+	}
 
 	c.AutoStartModules()
 
@@ -88,7 +93,7 @@ func (c *HomeCloud) ExportRPCServices() {
 }
 
 type syncable interface {
-	Sync(time.Duration) error
+	Sync(timeout time.Duration, fromCloud bool) error
 }
 
 func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
@@ -111,7 +116,7 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 			for _, model := range syncModels {
 				go func(model syncable) {
-					err := model.Sync(syncTimeout)
+					err := model.Sync(syncTimeout, enableSyncFromCloud)
 					if err != nil {
 						c.log.Warningf("Failed to sync model %s : %s", reflect.TypeOf(model).String(), err)
 						success = false

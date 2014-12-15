@@ -265,12 +265,12 @@ type SyncReply struct {
 	PushedObjects    SyncDataSet              `json:"pushedObjects"`
 }
 
-func (m *baseModel) Sync(timeout time.Duration) error {
+func (m *baseModel) Sync(timeout time.Duration, fromCloud bool) error {
 	m.syncing.Wait()
 	m.syncing.Add(1)
 	defer m.syncing.Done()
 
-	m.log.Infof("sync: Syncing %ss", m.idType)
+	m.log.Infof("sync: Syncing %ss. Save data from cloud?:%s", m.idType, fromCloud)
 
 	var diffList SyncDifferenceList
 
@@ -333,32 +333,36 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)
 	}
 
-	for id, requestedObj := range syncReply.RequestedObjects {
-		obj := reflect.New(m.objType).Interface()
+	if fromCloud {
+		for id, requestedObj := range syncReply.RequestedObjects {
+			obj := reflect.New(m.objType).Interface()
 
-		err := json.Unmarshal(requestedObj.Data, obj)
-		if err != nil {
-			m.log.Warningf("Failed to unmarshal requested %s id:%s error: %s", m.idType, id, err)
-			m.delete(id)
-		} else if string(requestedObj.Data) == "null" {
-			m.log.Infof("Requested %s id:%s has been remotely deleted", m.idType, id)
-			m.delete(id)
-		} else {
-
-			updated, err := m.save(id, obj)
+			err := json.Unmarshal(requestedObj.Data, obj)
 			if err != nil {
-				return fmt.Errorf("Failed to save requested %s id:%s error: %s", m.idType, id, err)
-			}
-			if !updated {
-				m.log.Warningf("We requested an updated %s id:%s but it was the same as what we had.", m.idType, id)
+				m.log.Warningf("Failed to unmarshal requested %s id:%s error: %s", m.idType, id, err)
+				m.delete(id)
+			} else if string(requestedObj.Data) == "null" {
+				m.log.Infof("Requested %s id:%s has been remotely deleted", m.idType, id)
+				m.delete(id)
+			} else {
+
+				updated, err := m.save(id, obj)
+				if err != nil {
+					return fmt.Errorf("Failed to save requested %s id:%s error: %s", m.idType, id, err)
+				}
+				if !updated {
+					m.log.Warningf("We requested an updated %s id:%s but it was the same as what we had.", m.idType, id)
+				}
+
 			}
 
+			err = m.markUpdated(id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)))
+			if err != nil {
+				m.log.Warningf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
+			}
 		}
-
-		err = m.markUpdated(id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)))
-		if err != nil {
-			m.log.Warningf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
-		}
+	} else {
+		m.log.Warningf("Ignoring sync data from cloud.")
 	}
 
 	if err != nil {
