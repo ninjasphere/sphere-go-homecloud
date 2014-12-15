@@ -1,5 +1,8 @@
 package models
 
+// SyncFromCloud pull down changes from cloud, ATM this is DISABLED because of bugs and issues surrounding deletions.
+const SyncFromCloud = false
+
 func GetInjectables() []interface{} {
 	// Oh i wish inject worked with nested
 
