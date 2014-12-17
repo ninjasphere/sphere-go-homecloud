@@ -119,7 +119,7 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 func setTimezone(zone string) error {
 	//ln -s /usr/share/zoneinfo/Etc/GMT$offset /etc/localtime
 
-	cmd := exec.Command("ln", "-s", "-f", "/usr/share/zoneinfo/"+zone, "/etc/localtime")
+	cmd := exec.Command("with-rw", "ln", "-s", "-f", "/usr/share/zoneinfo/"+zone, "/etc/localtime")
 	_, err := cmd.Output()
 
 	if err != nil {
