@@ -41,7 +41,9 @@ func main() {
 
 	log.Infof("Welcome home, Ninja.")
 
-	waitForNTP()
+	if config.Bool(true, "homecloud.waitForNTP") {
+		waitForNTP()
+	}
 
 	// The MQTT Connection
 	conn, err := ninja.Connect("sphere-go-homecloud")
