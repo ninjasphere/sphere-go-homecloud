@@ -38,7 +38,7 @@ func (c *HomeCloud) PostConstruct() error {
 	c.ensureSiteExists()
 
 	// \/ \/ This is terrible \/ \/
-	ledController := c.Conn.GetServiceClient("$node/" + config.Serial() + "/led-controller")
+	ledController := c.Conn.GetServiceClient("$home/led-controller")
 	go func() {
 		for {
 			err := ledController.Call("enableControl", nil, nil, time.Second*5)
@@ -46,7 +46,7 @@ func (c *HomeCloud) PostConstruct() error {
 				c.log.Infof("Failed to enable control on LED controller: %s", err)
 				time.Sleep(time.Second * 2)
 			} else {
-				time.Sleep(time.Second * 20)
+				time.Sleep(time.Second * 10)
 			}
 		}
 	}()
