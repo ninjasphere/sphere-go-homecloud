@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os/exec"
 
 	"github.com/ninjasphere/go-ninja/model"
 )
@@ -98,32 +97,11 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 
 		oldSite.TimeZoneID = tz.TimeZoneID
 		oldSite.TimeZoneName = tz.TimeZoneName
-		oldSite.TimeZoneOffset = tz.RawOffset
-		// TODO: Not handling DST
-
-		if tz.TimeZoneID != nil && *tz.TimeZoneID != "" {
-			err = setTimezone(*tz.TimeZoneID)
-			if err != nil {
-				m.log.Warningf("Failed to set timezone: %s", err)
-			}
-		}
+		oldSite.TimeZoneOffset = tz.RawOffset // TODO: Not handling DST. Worth even having?
 	}
 
 	if _, err := m.save(id, oldSite); err != nil {
 		return fmt.Errorf("Failed to update site (id:%s): %s", id, err)
-	}
-
-	return nil
-}
-
-func setTimezone(zone string) error {
-	//ln -s /usr/share/zoneinfo/Etc/GMT$offset /etc/localtime
-
-	cmd := exec.Command("with-rw", "ln", "-s", "-f", "/usr/share/zoneinfo/"+zone, "/etc/localtime")
-	_, err := cmd.Output()
-
-	if err != nil {
-		return err
 	}
 
 	return nil
