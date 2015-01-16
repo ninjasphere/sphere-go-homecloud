@@ -37,6 +37,12 @@ func (c *HomeCloud) PostConstruct() error {
 	c.ExportRPCServices()
 	c.ensureSiteExists()
 
+	ledController := c.Conn.GetServiceClient("$home/led-controller")
+	err := ledController.Call("enableControl", nil, nil, 0)
+	if err != nil {
+		c.log.Infof("Failed to enable control on LED controller: %s", err)
+	}
+
 	if enableSync {
 		// We wait for at least one sync to happen, or fail
 		<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
