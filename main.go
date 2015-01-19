@@ -68,6 +68,18 @@ func main() {
 		},
 	}
 
+	// Wait until we connect to redis successfully.
+	for {
+		c := pool.Get()
+
+		if c.Err() == nil {
+			c.Close()
+			break
+		}
+		log.Warningf("Failed to connect to redis: %s", c.Err())
+		time.Sleep(time.Second)
+	}
+
 	// Build the object graph using dependency injection
 	injectables := []interface{}{}
 
