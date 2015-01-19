@@ -1,6 +1,6 @@
 service=sphere-homecloud
 
-if (( $(ps -ef | grep -v grep | grep $service | wc -l) > 0 ));then
-service $service stop
-service $service start
+if test $(ps -ef | grep -v grep | grep $service | wc -l) -gt 0; then
+	service $service stop
+	service $service start
 fi
