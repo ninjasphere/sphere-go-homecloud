@@ -56,7 +56,7 @@ func main() {
 		MaxIdle:     config.MustInt("homecloud.redis.maxIdle"),
 		IdleTimeout: config.MustDuration("homecloud.redis.idleTimeout"),
 		Dial: func() (redis.Conn, error) {
-			c, err := redis.Dial("tcp", fmt.Sprintf(":%d", config.MustInt("homecloud.redis.port")))
+			c, err := redis.Dial("tcp", fmt.Sprintf("%s:%d", config.String("", "homecloud.redis.host"), config.MustInt("homecloud.redis.port")))
 			if err != nil {
 				return nil, err
 			}
