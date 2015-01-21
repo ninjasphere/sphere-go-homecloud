@@ -75,6 +75,7 @@ func (m *ModuleModel) Delete(id string) error {
 func (m *ModuleModel) SetConfig(moduleID string, config string) error {
 	m.syncing.Wait()
 	//defer m.sync()
+	defer syncFS()
 
 	conn := m.Pool.Get()
 	defer conn.Close()
@@ -86,6 +87,7 @@ func (m *ModuleModel) SetConfig(moduleID string, config string) error {
 func (m *ModuleModel) DeleteConfig(moduleID string) error {
 	m.syncing.Wait()
 	//defer m.sync()
+	defer syncFS()
 
 	conn := m.Pool.Get()
 	defer conn.Close()

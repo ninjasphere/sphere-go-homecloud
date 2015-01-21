@@ -21,6 +21,7 @@ func NewChannelModel() *ChannelModel {
 func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
 	m.syncing.Wait()
 	//defer m.sync()
+	defer syncFS()
 
 	channel.DeviceID = deviceID
 
@@ -41,6 +42,7 @@ func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
 func (m *ChannelModel) Delete(deviceID string, channelID string) error {
 	m.syncing.Wait()
 	//defer m.sync()
+	defer syncFS()
 
 	err := m.delete(deviceID + "-" + channelID)
 	if err != nil {

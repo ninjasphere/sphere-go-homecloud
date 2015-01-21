@@ -95,6 +95,7 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 
 	conn := m.Pool.Get()
 	defer conn.Close()
+	defer syncFS()
 
 	existing := reflect.New(m.objType)
 
@@ -174,6 +175,7 @@ func (m *baseModel) delete(id string) error {
 
 	conn := m.Pool.Get()
 	defer conn.Close()
+	defer syncFS()
 
 	conn.Send("MULTI")
 	conn.Send("SREM", m.idType+"s", id)
@@ -198,6 +200,8 @@ func (m *baseModel) delete(id string) error {
 func (m *baseModel) markUpdated(id string, t time.Time) error {
 	conn := m.Pool.Get()
 	defer conn.Close()
+	defer syncFS()
+
 	ts, err := t.MarshalText()
 	if err != nil {
 		return err
@@ -333,7 +337,10 @@ func (m *baseModel) Sync(timeout time.Duration, fromCloud bool) error {
 		return fmt.Errorf("Failed calling do_sync_items for model %s error:%s", m.idType, err)
 	}
 
+	defer syncFS()
+
 	if fromCloud {
+
 		for id, requestedObj := range syncReply.RequestedObjects {
 			obj := reflect.New(m.objType).Interface()
 

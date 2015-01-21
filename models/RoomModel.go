@@ -91,6 +91,7 @@ func (m *RoomModel) afterDelete(deletedRoom *model.Room) error {
 
 	conn := m.Pool.Get()
 	defer conn.Close()
+	defer syncFS()
 
 	thingIds, err := redis.Strings(conn.Do("SMEMBERS", fmt.Sprintf("room:%s:things", deletedRoom.ID)))
 
@@ -134,6 +135,8 @@ func (m *RoomModel) MoveThing(from *string, to *string, thing string) error {
 	if from == to {
 		return nil
 	}
+
+	defer syncFS()
 
 	if to != nil && from == nil {
 		// we need to add it

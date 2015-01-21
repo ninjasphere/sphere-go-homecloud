@@ -107,6 +107,7 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 
 	conn := m.Pool.Get()
 	defer conn.Close()
+	defer syncFS()
 
 	m.log.Debugf("afterSave - thing received id:%s with device:%s", thing.ID, thing.DeviceID)
 
@@ -225,9 +226,6 @@ func (m *ThingModel) FetchByDeviceId(deviceID string) (*model.Thing, error) {
 func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 	m.syncing.Wait()
 	//defer m.sync()
-
-	conn := m.Pool.Get()
-	defer conn.Close()
 
 	existing, err := m.Fetch(thingID)
 
@@ -364,6 +362,7 @@ func (m *ThingModel) deleteRelationshipWithDevice(deviceID string) error {
 
 	conn := m.Pool.Get()
 	defer conn.Close()
+	defer syncFS()
 
 	_, err := conn.Do("HDEL", "device-thing", deviceID)
 
