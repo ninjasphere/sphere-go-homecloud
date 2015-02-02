@@ -9,9 +9,13 @@ import (
 	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/redigo/redis"
 )
+
+var enableSyncFromCloud = config.Bool(false, "homecloud.sync.fromCloud")
+var deleteUnknownFromCloud = config.Bool(false, "homecloud.sync.deleteUnknownFromCloud")
 
 var (
 	RecordNotFound  = errors.New("Record Not Found")
@@ -269,12 +273,12 @@ type SyncReply struct {
 	PushedObjects    SyncDataSet              `json:"pushedObjects"`
 }
 
-func (m *baseModel) Sync(timeout time.Duration, fromCloud bool) error {
+func (m *baseModel) Sync(timeout time.Duration) error {
 	m.syncing.Wait()
 	m.syncing.Add(1)
 	defer m.syncing.Done()
 
-	m.log.Infof("sync: Syncing %ss. Save data from cloud?:%s", m.idType, fromCloud)
+	m.log.Infof("sync: Syncing %ss. Save data from cloud?:%s", m.idType, enableSyncFromCloud)
 
 	var diffList SyncDifferenceList
 
@@ -327,6 +331,15 @@ func (m *baseModel) Sync(timeout time.Duration, fromCloud bool) error {
 		requestedData[id] = SyncObject{obj, lastUpdated.UnixNano() / int64(time.Millisecond)}
 	}
 
+	if deleteUnknownFromCloud {
+		for id := range diffList.NodeRequires {
+			if _, ok := (*manifest)[id]; !ok { // We've never heard of this, so remove it
+				m.log.Infof("Removing %s id:%s from cloud.", m.idType, id)
+				requestedData[id] = SyncObject{nil, time.Now().UnixNano() / int64(time.Millisecond)}
+			}
+		}
+	}
+
 	syncClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
 
 	var syncReply SyncReply
@@ -339,7 +352,7 @@ func (m *baseModel) Sync(timeout time.Duration, fromCloud bool) error {
 
 	defer syncFS()
 
-	if fromCloud {
+	if enableSyncFromCloud {
 
 		for id, requestedObj := range syncReply.RequestedObjects {
 			obj := reflect.New(m.objType).Interface()

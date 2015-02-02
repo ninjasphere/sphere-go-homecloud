@@ -15,8 +15,8 @@ import (
 
 var log = logger.GetLogger("HomeCloud")
 
-var enableSync = config.Bool(true, "homecloud.sync.enabled")
-var enableSyncFromCloud = config.Bool(false, "homecloud.sync.fromCloud")
+var syncEnabled = config.Bool(true, "homecloud.sync.enabled")
+var syncTimeout = config.MustDuration("homecloud.sync.timeout")
 
 type HomeCloud struct {
 	Conn         *ninja.Connection    `inject:""`
@@ -43,7 +43,7 @@ func (c *HomeCloud) PostConstruct() error {
 		c.log.Infof("Failed to enable control on LED controller: %s", err)
 	}
 
-	if enableSync {
+	if syncEnabled {
 		// We wait for at least one sync to happen, or fail
 		<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
 	}
@@ -85,14 +85,13 @@ func (c *HomeCloud) ExportRPCServices() {
 }
 
 type syncable interface {
-	Sync(timeout time.Duration, fromCloud bool) error
+	Sync(timeout time.Duration) error
 }
 
 func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 	syncComplete := make(chan bool)
 
-	syncTimeout := config.MustDuration("homecloud.sync.timeout")
 	syncModels := []syncable{c.RoomModel, c.DeviceModel, c.ChannelModel, c.ThingModel, c.ThingModel}
 
 	go func() {
@@ -108,7 +107,7 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 			for _, model := range syncModels {
 				go func(model syncable) {
-					err := model.Sync(syncTimeout, enableSyncFromCloud)
+					err := model.Sync(syncTimeout)
 					if err != nil {
 						c.log.Warningf("Failed to sync model %s : %s", reflect.TypeOf(model).String(), err)
 						success = false
