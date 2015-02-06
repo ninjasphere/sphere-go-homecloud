@@ -1,6 +1,7 @@
 package homecloud
 
 import (
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
@@ -162,7 +163,7 @@ func (c *HomeCloud) AutoStartModules() {
 
 	interval := config.MustDuration("homecloud.autoStart.interval")
 
-	for _, name := range config.MustStringArray("homecloud.autoStart.modules") {
+	for _, name := range c.findAutoStartModules() {
 		log.Infof("-- (Re)starting '%s'", name)
 
 		err := do(name, "stop")
@@ -178,4 +179,24 @@ func (c *HomeCloud) AutoStartModules() {
 		}
 	}
 
+}
+
+func (c *HomeCloud) findAutoStartModules() []string {
+	modules := config.MustStringArray("homecloud.autoStart.modules")
+
+	// for convenience, start all drivers and apps in the userdata partition
+	// for ease of installation until official app provisioning is provided
+	autoStartDirs, err := filepath.Glob("/data/sphere/user-autostart/*/*")
+	if err != nil {
+		return modules
+	}
+
+	for _, path := range autoStartDirs {
+		moduleType := filepath.Base(filepath.Dir(path))
+		if moduleType == "drivers" || moduleType == "apps" {
+			modules = append(modules, filepath.Base(path))
+		}
+	}
+
+	return modules
 }
