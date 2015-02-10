@@ -111,7 +111,7 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 
 	m.log.Debugf("afterSave - thing received id:%s with device:%s", thing.ID, thing.DeviceID)
 
-	existingDeviceID, err := m.getDeviceIDForThing(thing.ID)
+	existingDeviceID, err := m.GetDeviceIDForThing(thing.ID)
 
 	if err != nil && err != RecordNotFound {
 		return fmt.Errorf("Failed to get existing device relationship error:%s", err)
@@ -121,7 +121,7 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 		if thing.DeviceID == nil {
 
 			// Theres no device, so remove the existing relationship if it's there
-			deviceID, err := m.getDeviceIDForThing(thing.ID)
+			deviceID, err := m.GetDeviceIDForThing(thing.ID)
 
 			if err == nil {
 				err = m.deleteRelationshipWithDevice(*deviceID)
@@ -133,7 +133,7 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 
 		} else {
 			// See if another thing is already attached to the device
-			existingThingID, err := m.getThingIDForDevice(thing.ID)
+			existingThingID, err := m.GetThingIDForDevice(thing.ID)
 
 			if existingThingID != nil {
 				// Remove the existing relationship
@@ -168,7 +168,7 @@ func (m *ThingModel) Delete(id string, deleteDevice bool) error {
 	//defer m.sync()
 
 	if deleteDevice {
-		deviceID, err := m.getDeviceIDForThing(id)
+		deviceID, err := m.GetDeviceIDForThing(id)
 
 		if err == nil && deviceID != nil {
 			m.deleteRelationshipWithDevice(*deviceID)
@@ -187,7 +187,7 @@ func (m *ThingModel) afterDelete(deletedThing *model.Thing) error {
 	// TODO: announce deletion via MQTT
 	// self.bus.publish(Ninja.topics.thing.goodbye.thing(thing.id), {id: thing.id});
 
-	deviceID, err := m.getDeviceIDForThing(deletedThing.ID)
+	deviceID, err := m.GetDeviceIDForThing(deletedThing.ID)
 
 	if err == nil {
 		err = m.deleteRelationshipWithDevice(*deviceID)
@@ -214,7 +214,7 @@ func (m *ThingModel) FetchByDeviceId(deviceID string) (*model.Thing, error) {
 	conn := m.Pool.Get()
 	defer conn.Close()
 
-	thingID, err := m.getThingIDForDevice(deviceID)
+	thingID, err := m.GetThingIDForDevice(deviceID)
 
 	if err != nil {
 		return nil, err
@@ -272,7 +272,7 @@ func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 }
 
 func (m *ThingModel) onFetch(thing *model.Thing, syncing bool) error {
-	deviceID, err := m.getDeviceIDForThing(thing.ID)
+	deviceID, err := m.GetDeviceIDForThing(thing.ID)
 
 	if err != nil && err != RecordNotFound {
 		return fmt.Errorf("Failed to fetch device id for thing (id:%s) : %s", thing.ID, err)
@@ -369,7 +369,7 @@ func (m *ThingModel) deleteRelationshipWithDevice(deviceID string) error {
 	return err
 }
 
-func (m *ThingModel) getThingIDForDevice(deviceID string) (*string, error) {
+func (m *ThingModel) GetThingIDForDevice(deviceID string) (*string, error) {
 	conn := m.Pool.Get()
 	defer conn.Close()
 
@@ -388,7 +388,7 @@ func (m *ThingModel) getThingIDForDevice(deviceID string) (*string, error) {
 	return &thingID, err
 }
 
-func (m *ThingModel) getDeviceIDForThing(thingID string) (*string, error) {
+func (m *ThingModel) GetDeviceIDForThing(thingID string) (*string, error) {
 	conn := m.Pool.Get()
 	defer conn.Close()
 

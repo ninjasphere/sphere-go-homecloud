@@ -36,7 +36,7 @@ func (m *DeviceModel) Fetch(deviceID string) (*model.Device, error) {
 
 	device.Channels = channels
 
-	thingID, err := m.Things.getThingIDForDevice(deviceID)
+	thingID, err := m.Things.GetThingIDForDevice(deviceID)
 
 	if err != nil && err != RecordNotFound {
 		return nil, err
