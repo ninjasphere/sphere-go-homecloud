@@ -9,7 +9,6 @@ import (
 	"github.com/go-martini/martini"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/sphere-go-homecloud/models"
-	"github.com/ninjasphere/sphere-go-homecloud/state"
 )
 
 type ThingRouter struct {
@@ -30,7 +29,7 @@ func (lr *ThingRouter) Register(r martini.Router) {
 }
 
 // GetAll retrieves a list of all things
-func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel, stateManager state.StateManager) {
+func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel) {
 	// if type is specified as a query param
 	qs := r.URL.Query()
 
@@ -48,15 +47,11 @@ func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel
 		return
 	}
 
-	for _, thing := range *things {
-		stateManager.Merge(thing)
-	}
-
 	WriteServerResponse(things, http.StatusOK, w)
 }
 
 // GetThing retrieves a thing using it's identifier
-func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel, stateManager state.StateManager) {
+func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel) {
 
 	thing, err := thingModel.Fetch(params["id"])
 
@@ -71,8 +66,6 @@ func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, th
 		WriteServerErrorResponse("Unable to retrieve thing", http.StatusInternalServerError, w)
 		return
 	}
-
-	stateManager.Merge(thing)
 
 	WriteServerResponse(thing, http.StatusOK, w)
 }

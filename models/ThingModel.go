@@ -7,13 +7,15 @@ import (
 	"code.google.com/p/go-uuid/uuid"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
+	"github.com/ninjasphere/sphere-go-homecloud/state"
 )
 
 type ThingModel struct {
 	baseModel
 
-	DeviceModel *DeviceModel `inject:""`
-	RoomModel   *RoomModel   `inject:""`
+	DeviceModel  *DeviceModel       `inject:""`
+	RoomModel    *RoomModel         `inject:""`
+	StateManager state.StateManager `inject:""`
 }
 
 func toThing(obj interface{}) *model.Thing {
@@ -267,6 +269,8 @@ func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 	if err := m.fetch(id, thing, false); err != nil {
 		return nil, fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
 	}
+
+	m.StateManager.Merge(thing)
 
 	return thing, nil
 }
