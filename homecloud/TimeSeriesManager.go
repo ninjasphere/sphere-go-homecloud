@@ -21,6 +21,7 @@ type TimeSeriesManager struct {
 type timeSeriesPayload struct {
 	Thing      string                        `json:"thing"`
 	ThingType  string                        `json:"thingType"`
+	Promoted   bool                          `json:"promoted"`
 	Device     string                        `json:"device"`
 	Channel    string                        `json:"channel"`
 	Schema     string                        `json:"schema"`
@@ -82,6 +83,7 @@ func (m *TimeSeriesManager) Start() error {
 			payload := &timeSeriesPayload{
 				Thing:     thing.ID,
 				ThingType: thing.Type,
+				Promoted:  thing.Promoted,
 				Device:    values["device"],
 				Channel:   values["channel"],
 				Schema:    channel.Schema,
