@@ -80,7 +80,7 @@ func (sm *NinjaStateManager) startListener() {
 
 	sm.log.Infof("startListener")
 
-	err := sm.Conn.GetServiceClient("$device/:deviceid/channel/:channelid").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
+	_, err := sm.Conn.GetServiceClient("$device/:deviceid/channel/:channelid").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
 
 		var data interface{}
 
