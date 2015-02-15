@@ -42,7 +42,7 @@ func (m *TimeSeriesManager) Start() error {
 
 	m.log.Infof("Starting")
 
-	err := m.Conn.GetServiceClient("$device/:device/channel/:channel").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
+	_, err := m.Conn.GetServiceClient("$device/:device/channel/:channel").OnEvent("state", func(params *json.RawMessage, values map[string]string) bool {
 
 		thing, err := m.ThingModel.FetchByDeviceId(values["device"])
 		if err != nil {

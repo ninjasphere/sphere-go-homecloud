@@ -62,7 +62,7 @@ func (m *ModuleManager) Start() error {
 		return true
 	})
 
-	return m.Conn.Subscribe("$node/:node/:type/:module/event/config", func(config *json.RawMessage, values map[string]string) bool {
+	_, err := m.Conn.Subscribe("$node/:node/:type/:module/event/config", func(config *json.RawMessage, values map[string]string) bool {
 		log.Infof("Got module config node:%s module:%s config:%s", values["node"], values["module"], *config)
 
 		if config != nil {
@@ -78,6 +78,7 @@ func (m *ModuleManager) Start() error {
 		return true
 	})
 
+	return err
 }
 
 func (m *ModuleManager) startModule(topic string, module *model.Module, config *string) error {

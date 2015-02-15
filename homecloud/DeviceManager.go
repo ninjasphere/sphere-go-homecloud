@@ -30,7 +30,7 @@ func (m *DeviceManager) PostConstruct() error {
 func (m *DeviceManager) Start() error {
 
 	// Listen for device announcements, and save them to redis
-	err := m.Conn.Subscribe("$device/:id/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
+	_, err := m.Conn.Subscribe("$device/:id/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
 
 		id := values["id"]
 
@@ -62,7 +62,7 @@ func (m *DeviceManager) Start() error {
 	}
 
 	// Listen for channel announcements, and save them to redis
-	err = m.Conn.Subscribe("$device/:device/channel/:channel/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
+	_, err = m.Conn.Subscribe("$device/:device/channel/:channel/event/announce", func(announcement *json.RawMessage, values map[string]string) bool {
 
 		deviceID, channelID := values["device"], values["channel"]
 
@@ -94,7 +94,7 @@ func (m *DeviceManager) Start() error {
 	}
 
 	// Map device events to thing events
-	err = m.Conn.SubscribeRaw("$device/:device/channel/:channel/event/:event", func(payload *json.RawMessage, values map[string]string) bool {
+	_, err = m.Conn.SubscribeRaw("$device/:device/channel/:channel/event/:event", func(payload *json.RawMessage, values map[string]string) bool {
 
 		if values["event"] == "announce" {
 			// We don't care about announcements
@@ -117,7 +117,7 @@ func (m *DeviceManager) Start() error {
 	}
 
 	// Map thing actuations to device actuations
-	err = m.Conn.SubscribeRaw("$thing/:thing/channel/:channel", func(payload *json.RawMessage, values map[string]string) bool {
+	_, err = m.Conn.SubscribeRaw("$thing/:thing/channel/:channel", func(payload *json.RawMessage, values map[string]string) bool {
 
 		device, err := m.ThingModel.GetDeviceIDForThing(values["thing"])
 		if err != nil {
@@ -135,7 +135,7 @@ func (m *DeviceManager) Start() error {
 	}
 
 	// Map device actuation replies to thing actuation replies
-	err = m.Conn.SubscribeRaw("$device/:device/channel/:channel/reply", func(payload *json.RawMessage, values map[string]string) bool {
+	_, err = m.Conn.SubscribeRaw("$device/:device/channel/:channel/reply", func(payload *json.RawMessage, values map[string]string) bool {
 
 		thing, err := m.ThingModel.GetThingIDForDevice(values["device"])
 		if err != nil {
