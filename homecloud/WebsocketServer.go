@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/gorilla/websocket"
 	"github.com/ninjasphere/go-ninja/api"
+	"github.com/ninjasphere/go-ninja/bus"
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
 )
@@ -18,9 +18,16 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
+type socketCommand struct {
+	Command      string            `json:"command"`
+	Topic        string            `json:"topic"`
+	Payload      string            `json:"payload"`
+	Subscription int               `json:"subscription"`
+	Params       map[string]string `json:"params"`
+}
+
 type WebsocketServer struct {
-	Conn *ninja.Connection `inject:""`
-	log  *logger.Logger
+	log *logger.Logger
 }
 
 func (s *WebsocketServer) PostConstruct() error {
@@ -31,14 +38,7 @@ func (s *WebsocketServer) PostConstruct() error {
 func (s *WebsocketServer) Listen() error {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 
-		topic, err := url.QueryUnescape(r.URL.Path[1:])
-
-		if err != nil {
-			log.Errorf("Websocket invalid topic: %s : %s", r.URL.Path, err)
-			return
-		}
-
-		log.Debugf("Websocket incoming URL: %s", topic)
+		log.Debugf("Websocket incoming connection")
 
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -46,33 +46,88 @@ func (s *WebsocketServer) Listen() error {
 			return
 		}
 
-		s.Conn.SubscribeRaw(topic, func(payload *json.RawMessage, headers map[string]string) bool {
+		clientID := "websocket-" + r.RemoteAddr
+		mqttURL := fmt.Sprintf("%s:%d", config.MustString("mqtt", "host"), config.MustInt("mqtt", "port"))
 
-			var outgoing = []interface{}{payload, headers}
-			json, err := json.Marshal(outgoing)
+		log.Infof("Connecting to %s using cid:%s", mqttURL, clientID)
 
-			if err != nil {
-				log.Errorf("Websocket failed to marshal outgoing message: %s", err)
-			} else if err = ws.WriteMessage(websocket.TextMessage, json); err != nil {
+		mqtt := bus.MustConnect(mqttURL, clientID)
+
+		subscriptions := make(map[int]*bus.Subscription)
+
+		send := func(command socketCommand) {
+			js, _ := json.Marshal(command)
+			if err = ws.WriteMessage(websocket.TextMessage, js); err != nil {
 				log.Errorf("Websocket failed writing message error: %s", err)
 			}
+		}
 
-			return true
-		})
+		id := 0
 
 		go func() {
 			for {
 				_, p, err := ws.ReadMessage()
 				if err != nil {
+					mqtt.Destroy()
 					return
 				}
 
-				log.Debugf("Incoming ws message: %s to %s", p, topic)
+				var cmd socketCommand
+				err = json.Unmarshal(p, &cmd)
 
-				s.Conn.GetMqttClient().Publish(topic, p)
+				log.Debugf("Incoming ws message: %s", p)
 
-				if err != nil {
-					log.Errorf("Websocket failed publishing message to mqtt: %s", err)
+				if cmd.Command == "unsubscribe" {
+					sub, ok := subscriptions[cmd.Subscription]
+					if !ok {
+						send(socketCommand{
+							Command: "error",
+							Payload: fmt.Sprintf("Failed to unsubscribe id: %d", cmd.Subscription),
+						})
+					} else {
+						sub.Cancel()
+					}
+				}
+
+				if cmd.Command == "subscribe" {
+
+					sid := id
+					id++
+
+					s, err := mqtt.Subscribe(ninja.GetSubscribeTopic(cmd.Payload), func(topic string, payload []byte) {
+
+						out := socketCommand{
+							Command:      "message",
+							Subscription: sid,
+							Payload:      string(payload),
+							Topic:        topic,
+						}
+
+						if params, ok := ninja.MatchTopicPattern(cmd.Payload, topic); ok {
+							out.Params = *params
+						}
+
+						send(out)
+					})
+
+					if err != nil {
+						send(socketCommand{
+							Command: "error",
+							Payload: fmt.Sprintf("Failed to subscribe to %s: %s", cmd.Payload, err),
+						})
+					} else {
+
+						subscriptions[sid] = s
+
+						send(socketCommand{
+							Command:      "suback",
+							Subscription: sid,
+						})
+					}
+				}
+
+				if cmd.Command == "publish" {
+					mqtt.Publish(cmd.Topic, []byte(cmd.Payload))
 				}
 
 			}
