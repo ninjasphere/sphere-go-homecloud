@@ -24,6 +24,7 @@ func (lr *RoomRouter) Register(r martini.Router) {
 	r.Post("", lr.PostNewRoom)
 	r.Get("/:id", lr.GetRoom)
 	r.Delete("/:id", lr.DeleteRoom)
+	r.Put("/:id", lr.UpdateRoom)
 	// r.Get("/:id/things", lr.GetThings) Not sure if this was used
 	r.Put("/:id/calibrate", lr.PutCalibrateRoom)
 	r.Put("/:id/apps/:appName", lr.PutAppRoomMessage)
@@ -121,6 +122,44 @@ func (lr *RoomRouter) GetRoom(params martini.Params, w http.ResponseWriter, room
 
 	if err != nil {
 		WriteServerErrorResponse("Unable to retrieve room", http.StatusInternalServerError, w)
+		return
+	}
+
+	WriteServerResponse(room, http.StatusOK, w)
+}
+
+// GetRoom updates a room using it's identifier
+func (lr *RoomRouter) UpdateRoom(params martini.Params, r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel) {
+
+	room, err := roomModel.Fetch(params["id"])
+
+	log.Infof(spew.Sprintf("room: %v", room))
+
+	if err == models.RecordNotFound {
+		WriteServerErrorResponse(fmt.Sprintf("Unknown room id: %s", params["id"]), http.StatusNotFound, w)
+		return
+	}
+
+	if err != nil {
+		WriteServerErrorResponse("Unable to retrieve room", http.StatusInternalServerError, w)
+		return
+	}
+
+	// get the request body
+	body, err := GetJsonPayload(r)
+
+	if err != nil {
+		WriteServerErrorResponse("Unable to read body to update room", http.StatusInternalServerError, w)
+		return
+	}
+
+	room.Name = body["name"].(string)
+	room.Type = body["type"].(string)
+
+	err = roomModel.Create(room)
+
+	if err != nil {
+		WriteServerErrorResponse("Unable to update room", http.StatusInternalServerError, w)
 		return
 	}
 
