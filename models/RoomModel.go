@@ -2,6 +2,7 @@ package models
 
 import (
 	"fmt"
+	"log"
 
 	"code.google.com/p/go-uuid/uuid"
 
@@ -33,6 +34,34 @@ func NewRoomModel() *RoomModel {
 	}
 
 	return roomModel
+}
+
+func (m *RoomModel) PostConstruct() error {
+
+	log.Printf("Checking for bad rooms...")
+
+	// Check all rooms to see if we have any without an ID.
+	// Delete any that are missing an ID.
+	ids, err := m.fetchIds()
+
+	if err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		room, err := m.Fetch(id)
+		if err != nil || !m.isValid(room) {
+			log.Printf("Bad room! ID: %s Room: %+v", id, room)
+			m.Delete(id)
+		}
+	}
+
+	return nil
+}
+
+// Do more here. Use the schemas.
+func (m *RoomModel) isValid(room *model.Room) bool {
+	return room.ID != ""
 }
 
 func (m *RoomModel) Create(room *model.Room) error {

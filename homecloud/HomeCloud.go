@@ -96,6 +96,10 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 	syncModels := []syncable{c.RoomModel, c.DeviceModel, c.ChannelModel, c.ThingModel, c.ThingModel}
 
 	go func() {
+
+		// XXX: Give us a few seconds to clean up the db if we have to.
+		time.Sleep(time.Second * 5)
+
 		for {
 
 			c.log.Infof("\n\n\n------ Timed model syncing started (every %s) ------ ", interval.String())
