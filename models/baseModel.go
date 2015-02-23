@@ -319,13 +319,13 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)
 		}
 
+		if err == RecordNotFound {
+			obj = nil
+		}
+
 		lastUpdated, err := m.getLastUpdated(id)
 		if err != nil {
 			return fmt.Errorf("Failed retrieving last updated time for requested %s id:%s error:%s", m.idType, id, err)
-		}
-
-		if err == RecordNotFound {
-			obj = nil
 		}
 
 		requestedData[id] = SyncObject{obj, lastUpdated.UnixNano() / int64(time.Millisecond)}
