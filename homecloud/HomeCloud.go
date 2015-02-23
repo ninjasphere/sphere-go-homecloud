@@ -93,7 +93,7 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 	syncComplete := make(chan bool)
 
-	syncModels := []syncable{c.RoomModel, c.DeviceModel, c.ChannelModel, c.ThingModel, c.ThingModel}
+	syncModels := []syncable{c.RoomModel, c.DeviceModel, c.ChannelModel, c.ThingModel, c.SiteModel}
 
 	go func() {
 
