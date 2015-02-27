@@ -1,6 +1,7 @@
 package homecloud
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
@@ -49,12 +50,17 @@ func (c *HomeCloud) PostConstruct() error {
 		<-c.StartSyncing(config.MustDuration("homecloud.sync.interval"))
 	}
 
+	// This is required to enable sphere-reset to clear out redis, then push this empty db to
+	// cloud.
+	if config.Bool(false, "clearcloud") {
+		c.log.Infof("Just clearing cloud so exiting now!")
+		os.Exit(0)
+	}
+
 	c.AutoStartModules()
 
 	return nil
 }
-
-// if config.Bool(false, "clearcloud") {
 
 func (c *HomeCloud) ClearCloud() {
 	log.Infof("Clearing all cloud data in 5 seconds")
@@ -67,7 +73,8 @@ func (c *HomeCloud) ClearCloud() {
 	c.RoomModel.ClearCloud()
 	c.SiteModel.ClearCloud()
 
-	log.Infof("All cloud data cleared? Probably.")
+	log.Infof("All cloud data cleared.")
+
 }
 
 func (c *HomeCloud) ExportRPCServices() {
