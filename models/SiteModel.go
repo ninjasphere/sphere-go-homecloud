@@ -85,6 +85,7 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 
 	oldSite.Name = site.Name
 	oldSite.Type = site.Type
+	oldSite.SitePreferences = site.SitePreferences
 
 	if (oldSite.Latitude == nil || oldSite.Longitude == nil) || (*oldSite.Latitude != *site.Latitude || *oldSite.Longitude != *site.Longitude) {
 		oldSite.Latitude = site.Latitude
