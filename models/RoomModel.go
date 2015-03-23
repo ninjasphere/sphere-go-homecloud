@@ -69,7 +69,7 @@ func (m *RoomModel) Create(room *model.Room) error {
 	//defer m.sync()
 
 	if room.ID == "" {
-		room.ID = uuid.NewUUID().String()
+		room.ID = uuid.NewRandom().String()
 	}
 
 	_, err := m.save(room.ID, room)
