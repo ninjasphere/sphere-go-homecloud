@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
+	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/model"
 )
 
@@ -20,12 +21,16 @@ func NewSiteModel() *SiteModel {
 	}
 }
 
-func (m *SiteModel) Fetch(siteID string) (*model.Site, error) {
+func (m *SiteModel) Fetch(id string) (*model.Site, error) {
 	m.syncing.Wait()
+
+	if id == "here" {
+		id = config.Serial()
+	}
 
 	site := &model.Site{}
 
-	if err := m.fetch(siteID, site, false); err != nil {
+	if err := m.fetch(id, site, false); err != nil {
 		return nil, err
 	}
 
@@ -57,6 +62,10 @@ func (m *SiteModel) Create(site *model.Site) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
+	if site.ID == "here" {
+		site.ID = config.Serial()
+	}
+
 	m.log.Debugf("Saving site %s", site.ID)
 
 	updated, err := m.save(site.ID, site)
@@ -70,12 +79,20 @@ func (m *SiteModel) Delete(id string) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
+	if id == "here" {
+		id = config.Serial()
+	}
+
 	return m.delete(id)
 }
 
 func (m *SiteModel) Update(id string, site *model.Site) error {
 	m.syncing.Wait()
 	//defer m.sync()
+
+	if id == "here" {
+		id = config.Serial()
+	}
 
 	oldSite := &model.Site{}
 
