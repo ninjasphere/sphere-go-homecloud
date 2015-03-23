@@ -97,7 +97,7 @@ func (m *ThingModel) Create(thing *model.Thing) error {
 	//defer m.sync()
 
 	if thing.ID == "" {
-		thing.ID = uuid.NewUUID().String()
+		thing.ID = uuid.NewRandom().String()
 	}
 
 	_, err := m.save(thing.ID, thing)
