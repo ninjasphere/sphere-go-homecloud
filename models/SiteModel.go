@@ -25,7 +25,7 @@ func (m *SiteModel) Fetch(id string) (*model.Site, error) {
 	m.syncing.Wait()
 
 	if id == "here" {
-		id = config.Serial()
+		id = config.MustString("siteId")
 	}
 
 	site := &model.Site{}
@@ -63,7 +63,7 @@ func (m *SiteModel) Create(site *model.Site) error {
 	//defer m.sync()
 
 	if site.ID == "here" {
-		site.ID = config.Serial()
+		site.ID = config.MustString("siteId")
 	}
 
 	m.log.Debugf("Saving site %s", site.ID)
@@ -80,7 +80,7 @@ func (m *SiteModel) Delete(id string) error {
 	//defer m.sync()
 
 	if id == "here" {
-		id = config.Serial()
+		id = config.MustString("siteId")
 	}
 
 	return m.delete(id)
@@ -91,7 +91,7 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 	//defer m.sync()
 
 	if id == "here" {
-		id = config.Serial()
+		id = config.MustString("siteId")
 	}
 
 	oldSite := &model.Site{}
