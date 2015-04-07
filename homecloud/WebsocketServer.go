@@ -57,7 +57,7 @@ func (s *WebsocketServer) Listen() error {
 
 		queue := make(chan *socketCommand)
 
-		func() {
+		go func() {
 			for {
 				command := <-queue
 				if command != nil {
