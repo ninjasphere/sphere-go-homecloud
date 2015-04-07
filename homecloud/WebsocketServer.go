@@ -55,11 +55,24 @@ func (s *WebsocketServer) Listen() error {
 
 		subscriptions := make(map[int]*bus.Subscription)
 
-		send := func(command socketCommand) {
-			js, _ := json.Marshal(command)
-			if err = ws.WriteMessage(websocket.TextMessage, js); err != nil {
-				log.Errorf("Websocket failed writing message error: %s", err)
+		queue := make(chan *socketCommand)
+
+		func() {
+			for {
+				command := <-queue
+				if command != nil {
+					js, _ := json.Marshal(*command)
+					if err = ws.WriteMessage(websocket.TextMessage, js); err != nil {
+						log.Errorf("Websocket failed writing message error: %s", err)
+					}
+				} else {
+					break
+				}
 			}
+		}()
+
+		send := func(command socketCommand) {
+			queue <- &command
 		}
 
 		id := 0
@@ -68,6 +81,7 @@ func (s *WebsocketServer) Listen() error {
 			for {
 				_, p, err := ws.ReadMessage()
 				if err != nil {
+					close(queue)
 					mqtt.Destroy()
 					return
 				}
