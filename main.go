@@ -86,7 +86,7 @@ func main() {
 	injectables = append(injectables, pool, conn)
 	injectables = append(injectables, &homecloud.HomeCloud{}, &homecloud.TimeSeriesManager{}, &homecloud.DeviceManager{}, &homecloud.ModuleManager{})
 	injectables = append(injectables, state.NewStateManager())
-	injectables = append(injectables, &rest.RestServer{}, &homecloud.WebsocketServer{})
+	injectables = append(injectables, &rest.RestServer{}, &homecloud.WebsocketServer{Port: config.MustInt("homecloud.websocket.port")})
 	injectables = append(injectables, models.GetInjectables()...)
 
 	err = inject.Populate(injectables...)

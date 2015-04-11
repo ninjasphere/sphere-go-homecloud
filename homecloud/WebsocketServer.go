@@ -27,10 +27,14 @@ type socketCommand struct {
 }
 
 type WebsocketServer struct {
-	log *logger.Logger
+	Port int
+	log  *logger.Logger
 }
 
 func (s *WebsocketServer) PostConstruct() error {
+	if s.Port < 0 {
+		return fmt.Errorf("illegal state: Port < 0")
+	}
 	s.log = logger.GetLogger("WebsocketServer")
 	return s.Listen()
 }
@@ -149,7 +153,7 @@ func (s *WebsocketServer) Listen() error {
 
 	})
 
-	listenAddress := fmt.Sprintf(":%d", config.MustInt("homecloud.websocket.port"))
+	listenAddress := fmt.Sprintf(":%d", s.Port)
 
 	s.log.Infof("Listening at %s", listenAddress)
 
