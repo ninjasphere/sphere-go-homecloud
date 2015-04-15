@@ -1,6 +1,2 @@
-service=sphere-homecloud
-
-if test $(ps -ef | grep -v grep | grep $service | wc -l) -gt 0; then
-	service $service stop
-	service $service start
-fi
+# restart will not start a stopped service - this meets requirements
+sudo restart sphere-homecloud
