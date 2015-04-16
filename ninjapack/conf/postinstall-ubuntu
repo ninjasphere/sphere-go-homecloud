@@ -1,2 +1,2 @@
 # restart will not start a stopped service - this meets requirements
-sudo restart sphere-homecloud
+sudo restart sphere-homecloud || true
