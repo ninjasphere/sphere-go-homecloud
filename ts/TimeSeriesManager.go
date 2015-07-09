@@ -1,4 +1,4 @@
-package homecloud
+package ts
 
 import (
 	"encoding/json"
@@ -11,14 +11,17 @@ import (
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
+var log = logger.GetLogger("ts")
+
 type TimeSeriesManager struct {
 	Conn         *ninja.Connection    `inject:""`
 	ThingModel   *models.ThingModel   `inject:""`
 	ChannelModel *models.ChannelModel `inject:""`
+	outgoing     chan *TimeSeriesPayload
 	log          *logger.Logger
 }
 
-type timeSeriesPayload struct {
+type TimeSeriesPayload struct {
 	Thing      string                        `json:"thing"`
 	ThingType  string                        `json:"thingType"`
 	Promoted   bool                          `json:"promoted"`
@@ -35,6 +38,18 @@ type timeSeriesPayload struct {
 
 func (m *TimeSeriesManager) PostConstruct() error {
 	m.log = logger.GetLogger("TimeSeriesManager")
+	m.outgoing = make(chan *TimeSeriesPayload, 1)
+
+	if config.Bool(false, "homecloud.influx.enable") {
+		influx, err := newinfluxRecorder()
+
+		if err != nil {
+			return err
+		}
+
+		go influx.messageHandler(m.outgoing)
+	}
+
 	return m.Start()
 }
 
@@ -80,7 +95,7 @@ func (m *TimeSeriesManager) Start() error {
 
 		if len(points) > 0 {
 
-			payload := &timeSeriesPayload{
+			payload := &TimeSeriesPayload{
 				Thing:     thing.ID,
 				ThingType: thing.Type,
 				Promoted:  thing.Promoted,
@@ -99,6 +114,12 @@ func (m *TimeSeriesManager) Start() error {
 			if err != nil {
 				log.Fatalf("Got a state event, but failed to send time series points. channel: %s on device: %s error: %s", values["channel"], values["device"], err)
 			}
+
+			select {
+			case m.outgoing <- payload:
+			default:
+			}
+
 		}
 
 		return true
