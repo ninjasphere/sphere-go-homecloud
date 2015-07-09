@@ -22,32 +22,29 @@ func NewModuleModel() *ModuleModel {
 	return model
 }
 
-func (m *ModuleModel) Fetch(id string) (*model.Module, error) {
+func (m *ModuleModel) Fetch(id string, conn redis.Conn) (*model.Module, error) {
 	m.syncing.Wait()
 	//defer m.sync()
 
 	module := &model.Module{}
 
-	if err := m.fetch(id, module, false); err != nil {
+	if err := m.fetch(id, module, false, conn); err != nil {
 		return nil, err
 	}
 
 	return module, nil
 }
 
-func (m *ModuleModel) Create(module *model.Module) error {
+func (m *ModuleModel) Create(module *model.Module, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
-	_, err := m.save(module.ID, module)
+	_, err := m.save(module.ID, module, conn)
 	return err
 }
 
-func (m *ModuleModel) GetConfig(moduleID string) (*string, error) {
+func (m *ModuleModel) GetConfig(moduleID string, conn redis.Conn) (*string, error) {
 	m.syncing.Wait()
-
-	conn := m.Pool.Get()
-	defer conn.Close()
 
 	exists, err := redis.Bool(conn.Do("HEXISTS", "module:"+moduleID, "config"))
 
@@ -60,37 +57,31 @@ func (m *ModuleModel) GetConfig(moduleID string) (*string, error) {
 	return nil, err
 }
 
-func (m *ModuleModel) Delete(id string) error {
+func (m *ModuleModel) Delete(id string, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
-	err := m.delete(id)
+	err := m.delete(id, conn)
 	if err != nil {
 		return err
 	}
 
-	return m.DeleteConfig(id)
+	return m.DeleteConfig(id, conn)
 }
 
-func (m *ModuleModel) SetConfig(moduleID string, config string) error {
+func (m *ModuleModel) SetConfig(moduleID string, config string, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 	defer syncFS()
-
-	conn := m.Pool.Get()
-	defer conn.Close()
 
 	_, err := conn.Do("HSET", "module:"+moduleID, "config", config)
 	return err
 }
 
-func (m *ModuleModel) DeleteConfig(moduleID string) error {
+func (m *ModuleModel) DeleteConfig(moduleID string, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 	defer syncFS()
-
-	conn := m.Pool.Get()
-	defer conn.Close()
 
 	_, err := conn.Do("HDEL", "module:"+moduleID, "config")
 	return err

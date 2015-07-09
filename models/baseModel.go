@@ -26,33 +26,40 @@ func newBaseModel(idType string, obj interface{}) baseModel {
 	objType := reflect.TypeOf(obj)
 
 	return baseModel{
-		syncing: &sync.WaitGroup{},
-		idType:  idType,
-		objType: objType,
-		log:     logger.GetLogger(objType.Name() + "Model"),
+		syncing:     &sync.WaitGroup{},
+		idType:      idType,
+		objType:     objType,
+		log:         logger.GetLogger(objType.Name() + "Model"),
+		entityLocks: make(map[string]*sync.Mutex),
 	}
 }
 
 type baseModel struct {
 	Conn *ninja.Connection `inject:""`
-	Pool *redis.Pool       `inject:""`
 
 	syncing     *sync.WaitGroup
 	idType      string
 	objType     reflect.Type
 	log         *logger.Logger
-	afterSave   func(interface{}) error
-	afterDelete func(obj interface{}) error
-	onFetch     func(obj interface{}, syncing bool) error
+	afterSave   func(obj interface{}, conn redis.Conn) error
+	afterDelete func(obj interface{}, conn redis.Conn) error
+	onFetch     func(obj interface{}, syncing bool, conn redis.Conn) error
 	sendEvent   func(event string, payload interface{}) error
+
+	entityLocks map[string]*sync.Mutex
 }
 
-func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
+func (m *baseModel) fetch(id string, obj interface{}, syncing bool, conn redis.Conn) error {
 
 	m.log.Debugf("Fetching %s %s", m.idType, id)
 
-	conn := m.Pool.Get()
-	defer conn.Close()
+	/*	if _, ok := m.entityLocks[id]; !ok {
+			m.entityLocks[id] = &sync.Mutex{}
+		}
+
+		m.entityLocks[id].Lock()
+		m.log.Debugf("Locked %s %s", m.idType, id)
+		defer m.entityLocks[id].Unlock()*/
 
 	item, err := redis.Values(conn.Do("HGETALL", m.idType+":"+id))
 
@@ -61,7 +68,6 @@ func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
 	}
 
 	if len(item) == 0 {
-		m.log.Debugf("%s %s was not found", m.idType, id)
 		return RecordNotFound
 	}
 
@@ -70,40 +76,33 @@ func (m *baseModel) fetch(id string, obj interface{}, syncing bool) error {
 	}
 
 	if m.onFetch != nil {
-		err = m.onFetch(obj, syncing)
+		err = m.onFetch(obj, syncing, conn)
 	}
 
 	return err
 }
 
-func (m *baseModel) Exists(id string) (bool, error) {
-	conn := m.Pool.Get()
-	defer conn.Close()
-
+func (m *baseModel) Exists(id string, conn redis.Conn) (bool, error) {
 	return redis.Bool(conn.Do("EXISTS", m.idType+":"+id))
 }
 
-func (m *baseModel) fetchIds() ([]string, error) {
+func (m *baseModel) fetchIds(conn redis.Conn) ([]string, error) {
 
-	conn := m.Pool.Get()
-	defer conn.Close()
 	ids, err := redis.Strings(conn.Do("SMEMBERS", m.idType+"s"))
 	m.log.Debugf("Found %d %s id(s)", m.idType, len(ids))
 
 	return ids, err
 }
 
-func (m *baseModel) save(id string, obj interface{}) (bool, error) {
+func (m *baseModel) save(id string, obj interface{}, conn redis.Conn) (bool, error) {
 
 	m.log.Debugf("Saving %s %s", m.idType, id)
 
-	conn := m.Pool.Get()
-	defer conn.Close()
 	defer syncFS()
 
 	existing := reflect.New(m.objType)
 
-	err := m.fetch(id, existing.Interface(), false)
+	err := m.fetch(id, existing.Interface(), false, conn)
 
 	if err != nil && err != RecordNotFound {
 		return false, err
@@ -137,7 +136,7 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 	}
 
 	if m.afterSave != nil {
-		err = m.afterSave(obj)
+		err = m.afterSave(obj, conn)
 
 		if err != nil {
 			return true, fmt.Errorf("Error during afterSave callback: %s", err)
@@ -152,23 +151,23 @@ func (m *baseModel) save(id string, obj interface{}) (bool, error) {
 		}
 	}
 
-	return true, m.markUpdated(id, time.Now())
+	return true, m.markUpdated(id, time.Now(), conn)
 }
 
-func (m *baseModel) delete(id string) error {
+func (m *baseModel) delete(id string, conn redis.Conn) error {
 
 	m.log.Debugf("Deleting %s %s", m.idType, id)
 
 	existing := reflect.New(m.objType).Interface()
 
-	existingErr := m.fetch(id, existing, false)
+	existingErr := m.fetch(id, existing, false, conn)
 	if existingErr != nil && existingErr != RecordNotFound {
 		return fmt.Errorf("Failed fetching existing %s before delete. error:%s", m.idType, existingErr)
 	}
 
 	if existingErr == RecordNotFound {
 
-		lastUpdated, _ := m.getLastUpdated(id)
+		lastUpdated, _ := m.getLastUpdated(id, conn)
 		if lastUpdated == nil {
 			// Hasn't ever existed...
 			return existingErr
@@ -177,8 +176,6 @@ func (m *baseModel) delete(id string) error {
 		m.log.Infof("%s id:%s appears to be already deleted, but we'll try again anyway.", m.idType, id)
 	}
 
-	conn := m.Pool.Get()
-	defer conn.Close()
 	defer syncFS()
 
 	conn.Send("MULTI")
@@ -187,7 +184,7 @@ func (m *baseModel) delete(id string) error {
 	_, err := conn.Do("EXEC")
 
 	if m.afterDelete != nil && existingErr == nil {
-		err = m.afterDelete(existing)
+		err = m.afterDelete(existing, conn)
 
 		if err != nil {
 			return fmt.Errorf("Failed on afterDelete: %s", err)
@@ -198,12 +195,10 @@ func (m *baseModel) delete(id string) error {
 		m.sendEvent("deleted", id)
 	}
 
-	return m.markUpdated(id, time.Now())
+	return m.markUpdated(id, time.Now(), conn)
 }
 
-func (m *baseModel) markUpdated(id string, t time.Time) error {
-	conn := m.Pool.Get()
-	defer conn.Close()
+func (m *baseModel) markUpdated(id string, t time.Time, conn redis.Conn) error {
 	defer syncFS()
 
 	ts, err := t.MarshalText()
@@ -214,9 +209,7 @@ func (m *baseModel) markUpdated(id string, t time.Time) error {
 	return err
 }
 
-func (m *baseModel) getLastUpdated(id string) (*time.Time, error) {
-	conn := m.Pool.Get()
-	defer conn.Close()
+func (m *baseModel) getLastUpdated(id string, conn redis.Conn) (*time.Time, error) {
 	timeString, err := redis.String(conn.Do("HGET", m.idType+"s:updated", id))
 
 	if err != nil || timeString == "" {
@@ -273,7 +266,7 @@ type SyncReply struct {
 	PushedObjects    SyncDataSet              `json:"pushedObjects"`
 }
 
-func (m *baseModel) Sync(timeout time.Duration) error {
+func (m *baseModel) Sync(timeout time.Duration, conn redis.Conn) error {
 	m.syncing.Wait()
 	m.syncing.Add(1)
 	defer m.syncing.Done()
@@ -282,7 +275,7 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 
 	var diffList SyncDifferenceList
 
-	manifest, err := m.getSyncManifest()
+	manifest, err := m.getSyncManifest(conn)
 	if err != nil {
 		return err
 	}
@@ -313,7 +306,7 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 	for id := range diffList.CloudRequires {
 		obj := reflect.New(m.objType).Interface()
 
-		err = m.fetch(id, obj, true)
+		err = m.fetch(id, obj, true, conn)
 
 		if err != nil && err != RecordNotFound {
 			return fmt.Errorf("Failed retrieving requested %s id:%s error:%s", m.idType, id, err)
@@ -323,7 +316,7 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 			obj = nil
 		}
 
-		lastUpdated, err := m.getLastUpdated(id)
+		lastUpdated, err := m.getLastUpdated(id, conn)
 		if err != nil {
 			return fmt.Errorf("Failed retrieving last updated time for requested %s id:%s error:%s", m.idType, id, err)
 		}
@@ -360,13 +353,13 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 			err := json.Unmarshal(requestedObj.Data, obj)
 			if err != nil {
 				m.log.Warningf("Failed to unmarshal requested %s id:%s error: %s", m.idType, id, err)
-				m.delete(id)
+				m.delete(id, conn)
 			} else if string(requestedObj.Data) == "null" {
 				m.log.Infof("Requested %s id:%s has been remotely deleted", m.idType, id)
-				m.delete(id)
+				m.delete(id, conn)
 			} else {
 
-				updated, err := m.save(id, obj)
+				updated, err := m.save(id, obj, conn)
 				if err != nil {
 					return fmt.Errorf("Failed to save requested %s id:%s error: %s", m.idType, id, err)
 				}
@@ -376,7 +369,7 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 
 			}
 
-			err = m.markUpdated(id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)))
+			err = m.markUpdated(id, time.Unix(0, requestedObj.LastModified*int64(time.Millisecond)), conn)
 			if err != nil {
 				m.log.Warningf("Failed to update last modified time of requested %s id:%s error: %s", m.idType, id, err)
 			}
@@ -392,8 +385,6 @@ func (m *baseModel) Sync(timeout time.Duration) error {
 			return err
 		}
 
-		conn := m.Pool.Get()
-		defer conn.Close()
 		_, err = conn.Do("SET", m.idType+"s:synced", ts)
 
 	}
@@ -436,10 +427,7 @@ func (m *baseModel) ClearCloud() error {
 	return nil
 }
 
-func (m *baseModel) getSyncManifest() (*SyncManifest, error) {
-
-	conn := m.Pool.Get()
-	defer conn.Close()
+func (m *baseModel) getSyncManifest(conn redis.Conn) (*SyncManifest, error) {
 
 	var manifest SyncManifest = make(map[string]int64)
 

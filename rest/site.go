@@ -8,6 +8,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/go-martini/martini"
 	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 	"github.com/ninjasphere/sphere-go-homecloud/state"
 )
@@ -29,8 +30,8 @@ func (lr *SiteRouter) Register(r martini.Router) {
 }
 
 // GetAll retrieves a list of all sites
-func (lr *SiteRouter) GetAll(r *http.Request, w http.ResponseWriter, siteModel *models.SiteModel, stateManager state.StateManager) {
-	sites, err := siteModel.FetchAll()
+func (lr *SiteRouter) GetAll(r *http.Request, w http.ResponseWriter, siteModel *models.SiteModel, stateManager state.StateManager, conn redis.Conn) {
+	sites, err := siteModel.FetchAll(conn)
 
 	if err != nil {
 		WriteServerErrorResponse("Unable to retrieve sites", http.StatusInternalServerError, w)
@@ -41,9 +42,9 @@ func (lr *SiteRouter) GetAll(r *http.Request, w http.ResponseWriter, siteModel *
 }
 
 // GetSite retrieves a site using it's identifier
-func (lr *SiteRouter) GetSite(params martini.Params, w http.ResponseWriter, siteModel *models.SiteModel, stateManager state.StateManager) {
+func (lr *SiteRouter) GetSite(params martini.Params, w http.ResponseWriter, siteModel *models.SiteModel, stateManager state.StateManager, conn redis.Conn) {
 
-	site, err := siteModel.Fetch(params["id"])
+	site, err := siteModel.Fetch(params["id"], conn)
 
 	log.Infof(spew.Sprintf("site: %v", site))
 
@@ -61,7 +62,7 @@ func (lr *SiteRouter) GetSite(params martini.Params, w http.ResponseWriter, site
 }
 
 // GetAll updates a site using it's identifier, with the JSON payload containing name and type
-func (lr *SiteRouter) PutSite(params martini.Params, r *http.Request, w http.ResponseWriter, siteModel *models.SiteModel) {
+func (lr *SiteRouter) PutSite(params martini.Params, r *http.Request, w http.ResponseWriter, siteModel *models.SiteModel, conn redis.Conn) {
 
 	var site *model.Site
 
@@ -72,7 +73,7 @@ func (lr *SiteRouter) PutSite(params martini.Params, r *http.Request, w http.Res
 		return
 	}
 
-	err = siteModel.Update(params["id"], site)
+	err = siteModel.Update(params["id"], site, conn)
 
 	if err != nil {
 		WriteServerErrorResponse("Unable to update site", http.StatusInternalServerError, w)
@@ -83,9 +84,9 @@ func (lr *SiteRouter) PutSite(params martini.Params, r *http.Request, w http.Res
 }
 
 // DeleteSite removes a site using it's identifier
-func (lr *SiteRouter) DeleteSite(params martini.Params, w http.ResponseWriter, siteModel *models.SiteModel) {
+func (lr *SiteRouter) DeleteSite(params martini.Params, w http.ResponseWriter, siteModel *models.SiteModel, conn redis.Conn) {
 
-	err := siteModel.Delete(params["id"])
+	err := siteModel.Delete(params["id"], conn)
 
 	if err == models.RecordNotFound {
 		WriteServerErrorResponse(fmt.Sprintf("Unknown site id: %s", params["id"]), http.StatusNotFound, w)

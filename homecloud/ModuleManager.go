@@ -9,12 +9,14 @@ import (
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/go-ninja/rpc/json2"
+	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
 type ModuleManager struct {
 	Conn        *ninja.Connection   `inject:""`
 	ModuleModel *models.ModuleModel `inject:""`
+	Pool        *redis.Pool         `inject:""`
 	log         *logger.Logger
 }
 
@@ -43,12 +45,15 @@ func (m *ModuleManager) Start() error {
 			return true
 		}
 
-		err = m.ModuleModel.Create(module)
+		conn := m.Pool.Get()
+		defer conn.Close()
+
+		err = m.ModuleModel.Create(module, conn)
 		if err != nil {
 			log.Warningf("Failed to save module announcement for %s error:%s", moduleName, err)
 		}
 
-		config, err := m.ModuleModel.GetConfig(values["module"])
+		config, err := m.ModuleModel.GetConfig(values["module"], conn)
 
 		if err != nil {
 			log.Warningf("Failed to retrieve config for module %s error:%s", moduleName, err)
@@ -66,7 +71,10 @@ func (m *ModuleManager) Start() error {
 		log.Infof("Got module config node:%s module:%s config:%s", values["node"], values["module"], *config)
 
 		if config != nil {
-			err := m.ModuleModel.SetConfig(values["module"], string(*config))
+			conn := m.Pool.Get()
+			defer conn.Close()
+
+			err := m.ModuleModel.SetConfig(values["module"], string(*config), conn)
 
 			if err != nil {
 				log.Warningf("Failed to save config for module: %s error: %s", values["module"], err)
@@ -98,7 +106,10 @@ func (m *ModuleManager) startModule(topic string, module *model.Module, config *
 		if ok {
 			if jsonError.Code == json2.E_INVALID_REQ {
 
-				err := m.ModuleModel.DeleteConfig(module.ID)
+				conn := m.Pool.Get()
+				defer conn.Close()
+
+				err := m.ModuleModel.DeleteConfig(module.ID, conn)
 				if err != nil {
 					log.Warningf("Module %s could not parse its config. Also, we couldn't clear it! errors:%s and %s", module.ID, jsonError.Message, err)
 				} else {

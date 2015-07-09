@@ -46,6 +46,15 @@ func (r *RestServer) Listen() error {
 	m.Map(r.Conn)
 	m.Map(r.StateManager)
 
+	m.Use(func(c martini.Context) {
+		conn := r.RedisPool.Get()
+		c.Map(conn)
+
+		c.Next()
+
+		conn.Close()
+	})
+
 	location := NewLocationRouter()
 	thing := NewThingRouter()
 	room := NewRoomRouter()

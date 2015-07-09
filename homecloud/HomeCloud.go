@@ -93,7 +93,7 @@ func (c *HomeCloud) ExportRPCServices() {
 }
 
 type syncable interface {
-	Sync(timeout time.Duration) error
+	Sync(timeout time.Duration, conn redis.Conn) error
 }
 
 func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
@@ -117,9 +117,11 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 			success := true
 
+			conn := c.Pool.Get()
+
 			for _, model := range syncModels {
 				go func(model syncable) {
-					err := model.Sync(syncTimeout)
+					err := model.Sync(syncTimeout, conn)
 					if err != nil {
 						c.log.Warningf("Failed to sync model %s : %s", reflect.TypeOf(model).String(), err)
 						success = false
@@ -137,6 +139,8 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 			default:
 			}
 
+			conn.Close()
+
 			time.Sleep(interval)
 		}
 	}()
@@ -145,7 +149,10 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 }
 
 func (c *HomeCloud) ensureSiteExists() {
-	site, err := c.SiteModel.Fetch(config.MustString("siteId"))
+	conn := c.Pool.Get()
+	defer conn.Close()
+
+	site, err := c.SiteModel.Fetch(config.MustString("siteId"), conn)
 	if err != nil && err != models.RecordNotFound {
 		log.Fatalf("Failed to get site: %s", err)
 	}
@@ -158,7 +165,7 @@ func (c *HomeCloud) ensureSiteExists() {
 			ID:   config.MustString("siteId"),
 			Type: &siteType,
 		}
-		err = c.SiteModel.Create(site)
+		err = c.SiteModel.Create(site, conn)
 		if err != nil && err != models.RecordNotFound {
 			log.Fatalf("Failed to create site: %s", err)
 		}

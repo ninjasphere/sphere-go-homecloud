@@ -8,6 +8,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/go-martini/martini"
 	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
@@ -29,7 +30,7 @@ func (lr *ThingRouter) Register(r martini.Router) {
 }
 
 // GetAll retrieves a list of all things
-func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel) {
+func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel, conn redis.Conn) {
 	// if type is specified as a query param
 	qs := r.URL.Query()
 
@@ -37,9 +38,9 @@ func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel
 	var things *[]*model.Thing
 
 	if qs.Get("type") != "" {
-		things, err = thingModel.FetchByType(qs.Get("type"))
+		things, err = thingModel.FetchByType(qs.Get("type"), conn)
 	} else {
-		things, err = thingModel.FetchAll()
+		things, err = thingModel.FetchAll(conn)
 	}
 
 	if err != nil {
@@ -51,9 +52,9 @@ func (lr *ThingRouter) GetAll(r *http.Request, w http.ResponseWriter, thingModel
 }
 
 // GetThing retrieves a thing using it's identifier
-func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel) {
+func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel, conn redis.Conn) {
 
-	thing, err := thingModel.Fetch(params["id"])
+	thing, err := thingModel.Fetch(params["id"], conn)
 
 	log.Infof(spew.Sprintf("thing: %v", thing))
 
@@ -71,7 +72,7 @@ func (lr *ThingRouter) GetThing(params martini.Params, w http.ResponseWriter, th
 }
 
 // GetAll updates a thing using it's identifier, with the JSON payload containing name and type
-func (lr *ThingRouter) PutThing(params martini.Params, r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel) {
+func (lr *ThingRouter) PutThing(params martini.Params, r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel, conn redis.Conn) {
 
 	var thing *model.Thing
 
@@ -82,7 +83,7 @@ func (lr *ThingRouter) PutThing(params martini.Params, r *http.Request, w http.R
 		return
 	}
 
-	err = thingModel.Update(params["id"], thing)
+	err = thingModel.Update(params["id"], thing, conn)
 
 	if err != nil {
 		WriteServerErrorResponse("Unable to update thing", http.StatusInternalServerError, w)
@@ -93,9 +94,9 @@ func (lr *ThingRouter) PutThing(params martini.Params, r *http.Request, w http.R
 }
 
 // PutThingLocation assigns or clears the location for a thing, this is currently a room identifier sent in the payload
-func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel) {
+func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, w http.ResponseWriter, thingModel *models.ThingModel, conn redis.Conn) {
 
-	thing, err := thingModel.Fetch(params["id"])
+	thing, err := thingModel.Fetch(params["id"], conn)
 
 	log.Infof(spew.Sprintf("thing: %v", thing))
 
@@ -121,9 +122,9 @@ func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, 
 
 	// not a big fan of this magic
 	if roomID == "" {
-		err = thingModel.SetLocation(params["id"], nil)
+		err = thingModel.SetLocation(params["id"], nil, conn)
 	} else {
-		err = thingModel.SetLocation(params["id"], &roomID)
+		err = thingModel.SetLocation(params["id"], &roomID, conn)
 	}
 
 	if err != nil {
@@ -135,9 +136,9 @@ func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, 
 }
 
 // DeleteThing removes a thing using it's identifier
-func (lr *ThingRouter) DeleteThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel) {
+func (lr *ThingRouter) DeleteThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel, conn redis.Conn) {
 
-	err := thingModel.Delete(params["id"], true)
+	err := thingModel.Delete(params["id"], true, conn)
 
 	if err == models.RecordNotFound {
 		WriteServerErrorResponse(fmt.Sprintf("Unknown thing id: %s", params["id"]), http.StatusNotFound, w)

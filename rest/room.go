@@ -8,6 +8,7 @@ import (
 	"github.com/go-martini/martini"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
@@ -64,8 +65,8 @@ func (lr *RoomRouter) Register(r martini.Router) {
 //    }
 // ]
 //
-func (lr *RoomRouter) GetAll(w http.ResponseWriter, roomModel *models.RoomModel) {
-	rooms, err := roomModel.FetchAll()
+func (lr *RoomRouter) GetAll(w http.ResponseWriter, roomModel *models.RoomModel, conn redis.Conn) {
+	rooms, err := roomModel.FetchAll(conn)
 
 	log.Infof(spew.Sprintf("room: %v", rooms))
 
@@ -82,7 +83,7 @@ func (lr *RoomRouter) GetAll(w http.ResponseWriter, roomModel *models.RoomModel)
 // Request {"name":"Bedroom","type":"bedroom"}
 // Response {"name":"Bedroom","type":"bedroom","id":"16c63268-c0e5-48a2-b312-c74c64837802"}
 //
-func (lr *RoomRouter) PostNewRoom(r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel) {
+func (lr *RoomRouter) PostNewRoom(r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel, conn redis.Conn) {
 
 	// get the request body
 	body, err := GetJsonPayload(r)
@@ -97,7 +98,7 @@ func (lr *RoomRouter) PostNewRoom(r *http.Request, w http.ResponseWriter, roomMo
 
 	room := &model.Room{Name: roomName, Type: roomType}
 
-	err = roomModel.Create(room)
+	err = roomModel.Create(room, conn)
 
 	if err != nil {
 		WriteServerErrorResponse("Unable to create room", http.StatusInternalServerError, w)
@@ -109,9 +110,9 @@ func (lr *RoomRouter) PostNewRoom(r *http.Request, w http.ResponseWriter, roomMo
 }
 
 // GetRoom retrieves a room using it's identifier
-func (lr *RoomRouter) GetRoom(params martini.Params, w http.ResponseWriter, roomModel *models.RoomModel) {
+func (lr *RoomRouter) GetRoom(params martini.Params, w http.ResponseWriter, roomModel *models.RoomModel, conn redis.Conn) {
 
-	room, err := roomModel.Fetch(params["id"])
+	room, err := roomModel.Fetch(params["id"], conn)
 
 	log.Infof(spew.Sprintf("room: %v", room))
 
@@ -129,9 +130,9 @@ func (lr *RoomRouter) GetRoom(params martini.Params, w http.ResponseWriter, room
 }
 
 // GetRoom updates a room using it's identifier
-func (lr *RoomRouter) UpdateRoom(params martini.Params, r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel) {
+func (lr *RoomRouter) UpdateRoom(params martini.Params, r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel, conn redis.Conn) {
 
-	room, err := roomModel.Fetch(params["id"])
+	room, err := roomModel.Fetch(params["id"], conn)
 
 	log.Infof(spew.Sprintf("room: %v", room))
 
@@ -156,7 +157,7 @@ func (lr *RoomRouter) UpdateRoom(params martini.Params, r *http.Request, w http.
 	room.Name = body["name"].(string)
 	room.Type = body["type"].(string)
 
-	err = roomModel.Create(room)
+	err = roomModel.Create(room, conn)
 
 	if err != nil {
 		WriteServerErrorResponse("Unable to update room", http.StatusInternalServerError, w)
@@ -167,9 +168,9 @@ func (lr *RoomRouter) UpdateRoom(params martini.Params, r *http.Request, w http.
 }
 
 // DeleteRoom removes a room using it's identifier
-func (lr *RoomRouter) DeleteRoom(params martini.Params, w http.ResponseWriter, roomModel *models.RoomModel) {
+func (lr *RoomRouter) DeleteRoom(params martini.Params, w http.ResponseWriter, roomModel *models.RoomModel, conn redis.Conn) {
 
-	err := roomModel.Delete(params["id"])
+	err := roomModel.Delete(params["id"], conn)
 
 	if err == models.RecordNotFound {
 		WriteServerErrorResponse(fmt.Sprintf("Unknown room id: %s", params["id"]), http.StatusNotFound, w)
@@ -189,9 +190,9 @@ func (lr *RoomRouter) DeleteRoom(params martini.Params, w http.ResponseWriter, r
 // Request {"id":"1468fbcd-3ca6-4c6f-a742-ab91221e5462","device":"20CD39A0899C","reset":true}
 // Response 200
 //
-func (lr *RoomRouter) PutCalibrateRoom(params martini.Params, w http.ResponseWriter, roomModel *models.RoomModel) {
+func (lr *RoomRouter) PutCalibrateRoom(params martini.Params, w http.ResponseWriter, roomModel *models.RoomModel, conn redis.Conn) {
 
-	room, err := roomModel.Fetch(params["id"])
+	room, err := roomModel.Fetch(params["id"], conn)
 
 	log.Infof(spew.Sprintf("room: %v", room))
 
@@ -212,9 +213,9 @@ func (lr *RoomRouter) PutCalibrateRoom(params martini.Params, w http.ResponseWri
 }
 
 // PutAppRoomMessage sends a message to the app passing the identifier of the room which it applies too
-func (lr *RoomRouter) PutAppRoomMessage(params martini.Params, r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel, conn *ninja.Connection) {
+func (lr *RoomRouter) PutAppRoomMessage(params martini.Params, r *http.Request, w http.ResponseWriter, roomModel *models.RoomModel, conn *ninja.Connection, rconn redis.Conn) {
 
-	room, err := roomModel.Fetch(params["id"])
+	room, err := roomModel.Fetch(params["id"], rconn)
 
 	log.Infof(spew.Sprintf("room: %v", room))
 

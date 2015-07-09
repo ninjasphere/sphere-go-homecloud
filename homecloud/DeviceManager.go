@@ -7,6 +7,7 @@ import (
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/logger"
 	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
@@ -15,6 +16,7 @@ type DeviceManager struct {
 	DeviceModel  *models.DeviceModel  `inject:""`
 	ChannelModel *models.ChannelModel `inject:""`
 	ThingModel   *models.ThingModel   `inject:""`
+	Pool         *redis.Pool          `inject:""`
 	log          *logger.Logger
 }
 
@@ -49,7 +51,10 @@ func (m *DeviceManager) Start() error {
 			return true
 		}
 
-		err = m.DeviceModel.Create(device)
+		conn := m.Pool.Get()
+		defer conn.Close()
+
+		err = m.DeviceModel.Create(device, conn)
 		if err != nil {
 			log.Warningf("Failed to save device announcement for device:%s error:%s", id, err)
 		}
@@ -81,7 +86,9 @@ func (m *DeviceManager) Start() error {
 			return true
 		}
 
-		err = m.ChannelModel.Create(deviceID, channel)
+		conn := m.Pool.Get()
+		defer conn.Close()
+		err = m.ChannelModel.Create(deviceID, channel, conn)
 		if err != nil {
 			log.Warningf("Failed to save channel announcement for device:%s channel:%s error:%s", deviceID, channelID, err)
 		}
@@ -93,7 +100,7 @@ func (m *DeviceManager) Start() error {
 		return err
 	}
 
-	// Map device events to thing events
+	/*// Map device events to thing events
 	_, err = m.Conn.SubscribeRaw("$device/:device/channel/:channel/event/:event", func(payload *json.RawMessage, values map[string]string) bool {
 
 		if values["event"] == "announce" {
@@ -101,7 +108,9 @@ func (m *DeviceManager) Start() error {
 			return true
 		}
 
-		thing, err := m.ThingModel.GetThingIDForDevice(values["device"])
+		conn := m.Pool.Get()
+		defer conn.Close()
+		thing, err := m.ThingModel.GetThingIDForDevice(values["device"], conn)
 		if err != nil {
 			log.Errorf("Got an event, but failed to fetch the thing id for device: %s error: %s", values["device"], err)
 			return true
@@ -110,7 +119,7 @@ func (m *DeviceManager) Start() error {
 		m.Conn.GetMqttClient().Publish(fmt.Sprintf("$thing/%s/channel/%s/event/%s", *thing, values["channel"], values["event"]), *payload)
 
 		return true
-	})
+	})*/
 
 	if err != nil {
 		return err
@@ -119,7 +128,9 @@ func (m *DeviceManager) Start() error {
 	// Map thing actuations to device actuations
 	_, err = m.Conn.SubscribeRaw("$thing/:thing/channel/:channel", func(payload *json.RawMessage, values map[string]string) bool {
 
-		device, err := m.ThingModel.GetDeviceIDForThing(values["thing"])
+		conn := m.Pool.Get()
+		defer conn.Close()
+		device, err := m.ThingModel.GetDeviceIDForThing(values["thing"], conn)
 		if err != nil {
 			log.Errorf("Got a thing actuation, but failed to fetch the device for thing: %s error: %s", values["thing"], err)
 			return true
@@ -137,7 +148,9 @@ func (m *DeviceManager) Start() error {
 	// Map device actuation replies to thing actuation replies
 	_, err = m.Conn.SubscribeRaw("$device/:device/channel/:channel/reply", func(payload *json.RawMessage, values map[string]string) bool {
 
-		thing, err := m.ThingModel.GetThingIDForDevice(values["device"])
+		conn := m.Pool.Get()
+		defer conn.Close()
+		thing, err := m.ThingModel.GetThingIDForDevice(values["device"], conn)
 		if err != nil {
 			log.Errorf("Got a device actuation reply, but failed to fetch the thing for device: %s error: %s", values["device"], err)
 			return true

@@ -55,7 +55,9 @@ func main() {
 	// Our redis pool
 	pool := &redis.Pool{
 		MaxIdle:     config.MustInt("homecloud.redis.maxIdle"),
+		MaxActive:   config.Int(10, "homecloud.redis.maxActive"),
 		IdleTimeout: config.MustDuration("homecloud.redis.idleTimeout"),
+		Wait:        true,
 		Dial: func() (redis.Conn, error) {
 			c, err := redis.Dial("tcp", fmt.Sprintf("%s:%d", config.String("", "homecloud.redis.host"), config.MustInt("homecloud.redis.port")))
 			if err != nil {

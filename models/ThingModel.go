@@ -32,23 +32,23 @@ func NewThingModel() *ThingModel {
 		baseModel: newBaseModel("thing", model.Thing{}),
 	}
 
-	thingModel.baseModel.afterSave = func(obj interface{}) error {
-		return thingModel.afterSave(toThing(obj))
+	thingModel.baseModel.afterSave = func(obj interface{}, conn redis.Conn) error {
+		return thingModel.afterSave(toThing(obj), conn)
 	}
-	thingModel.baseModel.afterDelete = func(obj interface{}) error {
-		return thingModel.afterDelete(toThing(obj))
+	thingModel.baseModel.afterDelete = func(obj interface{}, conn redis.Conn) error {
+		return thingModel.afterDelete(toThing(obj), conn)
 	}
-	thingModel.baseModel.onFetch = func(obj interface{}, syncing bool) error {
-		return thingModel.onFetch(toThing(obj), syncing)
+	thingModel.baseModel.onFetch = func(obj interface{}, syncing bool, conn redis.Conn) error {
+		return thingModel.onFetch(toThing(obj), syncing, conn)
 	}
 
 	return thingModel
 }
 
-func (m *ThingModel) ensureThingForDevice(device *model.Device) error {
+func (m *ThingModel) ensureThingForDevice(device *model.Device, conn redis.Conn) error {
 
 	// It was a new device, we might need to make a thing for it
-	thing, err := m.FetchByDeviceId(device.ID)
+	thing, err := m.FetchByDeviceId(device.ID, conn)
 
 	if err != nil && err != RecordNotFound {
 		// An actual error
@@ -89,10 +89,10 @@ func (m *ThingModel) ensureThingForDevice(device *model.Device) error {
 		thing.Name = *device.Name
 	}
 
-	return m.Create(thing)
+	return m.Create(thing, conn)
 }
 
-func (m *ThingModel) Create(thing *model.Thing) error {
+func (m *ThingModel) Create(thing *model.Thing, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -100,20 +100,18 @@ func (m *ThingModel) Create(thing *model.Thing) error {
 		thing.ID = uuid.NewRandom().String()
 	}
 
-	_, err := m.save(thing.ID, thing)
+	_, err := m.save(thing.ID, thing, conn)
 
 	return err
 }
 
-func (m *ThingModel) afterSave(thing *model.Thing) error {
+func (m *ThingModel) afterSave(thing *model.Thing, conn redis.Conn) error {
 
-	conn := m.Pool.Get()
-	defer conn.Close()
 	defer syncFS()
 
 	m.log.Debugf("afterSave - thing received id:%s with device:%s", thing.ID, thing.DeviceID)
 
-	existingDeviceID, err := m.GetDeviceIDForThing(thing.ID)
+	existingDeviceID, err := m.GetDeviceIDForThing(thing.ID, conn)
 
 	if err != nil && err != RecordNotFound {
 		return fmt.Errorf("Failed to get existing device relationship error:%s", err)
@@ -123,10 +121,10 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 		if thing.DeviceID == nil {
 
 			// Theres no device, so remove the existing relationship if it's there
-			deviceID, err := m.GetDeviceIDForThing(thing.ID)
+			deviceID, err := m.GetDeviceIDForThing(thing.ID, conn)
 
 			if err == nil {
-				err = m.deleteRelationshipWithDevice(*deviceID)
+				err = m.deleteRelationshipWithDevice(*deviceID, conn)
 			}
 
 			if err != nil {
@@ -135,11 +133,11 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 
 		} else {
 			// See if another thing is already attached to the device
-			existingThingID, err := m.GetThingIDForDevice(thing.ID)
+			existingThingID, err := m.GetThingIDForDevice(thing.ID, conn)
 
 			if existingThingID != nil {
 				// Remove the existing relationship
-				err = m.deleteRelationshipWithDevice(*thing.DeviceID)
+				err = m.deleteRelationshipWithDevice(*thing.DeviceID, conn)
 
 				if err != nil {
 					return fmt.Errorf("Failed to remove existing relationship to device %s. Currently attached to thing %s, we wanted it to be attached to %s. Error:%s", *thing.DeviceID, *existingThingID, thing.ID, err)
@@ -154,7 +152,7 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 		}
 
 		if err == nil {
-			err = m.markUpdated(thing.ID, time.Now())
+			err = m.markUpdated(thing.ID, time.Now(), conn)
 			if err != nil {
 				return fmt.Errorf("Failed to mark thing updated. error: %s", err)
 			}
@@ -165,34 +163,34 @@ func (m *ThingModel) afterSave(thing *model.Thing) error {
 	return nil
 }
 
-func (m *ThingModel) Delete(id string, deleteDevice bool) error {
+func (m *ThingModel) Delete(id string, deleteDevice bool, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
 	if deleteDevice {
-		deviceID, err := m.GetDeviceIDForThing(id)
+		deviceID, err := m.GetDeviceIDForThing(id, conn)
 
 		if err == nil && deviceID != nil {
-			m.deleteRelationshipWithDevice(*deviceID)
-			err = m.DeviceModel.Delete(*deviceID)
+			m.deleteRelationshipWithDevice(*deviceID, conn)
+			err = m.DeviceModel.Delete(*deviceID, conn)
 			if err != nil {
 				m.log.Infof("Failed to delete attached device: %s when removing thing: %s. Continuing. error:%s", deviceID, id, err)
 			}
 		}
 	}
 
-	return m.delete(id)
+	return m.delete(id, conn)
 }
 
-func (m *ThingModel) afterDelete(deletedThing *model.Thing) error {
+func (m *ThingModel) afterDelete(deletedThing *model.Thing, conn redis.Conn) error {
 
 	// TODO: announce deletion via MQTT
 	// self.bus.publish(Ninja.topics.thing.goodbye.thing(thing.id), {id: thing.id});
 
-	deviceID, err := m.GetDeviceIDForThing(deletedThing.ID)
+	deviceID, err := m.GetDeviceIDForThing(deletedThing.ID, conn)
 
 	if err == nil {
-		err = m.deleteRelationshipWithDevice(*deviceID)
+		err = m.deleteRelationshipWithDevice(*deviceID, conn)
 	}
 
 	if err == RecordNotFound {
@@ -200,36 +198,33 @@ func (m *ThingModel) afterDelete(deletedThing *model.Thing) error {
 		return nil
 	}
 
-	device, err := m.DeviceModel.Fetch(*deviceID)
+	device, err := m.DeviceModel.Fetch(*deviceID, conn)
 
 	if err != nil && err != RecordNotFound {
 		return err
 	}
 
 	// Create a new, unpromoted thing for the device
-	return m.ensureThingForDevice(device)
+	return m.ensureThingForDevice(device, conn)
 }
 
-func (m *ThingModel) FetchByDeviceId(deviceID string) (*model.Thing, error) {
+func (m *ThingModel) FetchByDeviceId(deviceID string, conn redis.Conn) (*model.Thing, error) {
 	m.syncing.Wait()
 
-	conn := m.Pool.Get()
-	defer conn.Close()
-
-	thingID, err := m.GetThingIDForDevice(deviceID)
+	thingID, err := m.GetThingIDForDevice(deviceID, conn)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return m.Fetch(*thingID)
+	return m.Fetch(*thingID, conn)
 }
 
-func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
+func (m *ThingModel) SetLocation(thingID string, roomID *string, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
-	existing, err := m.Fetch(thingID)
+	existing, err := m.Fetch(thingID, conn)
 
 	if err != nil {
 		return err
@@ -240,7 +235,7 @@ func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 		return nil
 	}
 
-	err = m.RoomModel.MoveThing(existing.Location, roomID, thingID)
+	err = m.RoomModel.MoveThing(existing.Location, roomID, thingID, conn)
 
 	if err != nil {
 		if roomID == nil {
@@ -258,15 +253,15 @@ func (m *ThingModel) SetLocation(thingID string, roomID *string) error {
 		existing.Promoted = false
 	}
 
-	_, err = m.save(thingID, existing)
+	_, err = m.save(thingID, existing, conn)
 	return err
 }
 
-func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
+func (m *ThingModel) Fetch(id string, conn redis.Conn) (*model.Thing, error) {
 	m.syncing.Wait()
 	thing := &model.Thing{}
 
-	if err := m.fetch(id, thing, false); err != nil {
+	if err := m.fetch(id, thing, false, conn); err != nil {
 		return nil, fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
 	}
 
@@ -275,8 +270,8 @@ func (m *ThingModel) Fetch(id string) (*model.Thing, error) {
 	return thing, nil
 }
 
-func (m *ThingModel) onFetch(thing *model.Thing, syncing bool) error {
-	deviceID, err := m.GetDeviceIDForThing(thing.ID)
+func (m *ThingModel) onFetch(thing *model.Thing, syncing bool, conn redis.Conn) error {
+	deviceID, err := m.GetDeviceIDForThing(thing.ID, conn)
 
 	if err != nil && err != RecordNotFound {
 		return fmt.Errorf("Failed to fetch device id for thing (id:%s) : %s", thing.ID, err)
@@ -287,7 +282,7 @@ func (m *ThingModel) onFetch(thing *model.Thing, syncing bool) error {
 		thing.DeviceID = deviceID
 
 		if !syncing {
-			device, err := m.DeviceModel.Fetch(*deviceID)
+			device, err := m.DeviceModel.Fetch(*deviceID, conn)
 			if err != nil {
 				return fmt.Errorf("Failed to fetch nested device (id:%s) on thing %s : %s", *deviceID, thing.ID, err)
 			}
@@ -298,9 +293,9 @@ func (m *ThingModel) onFetch(thing *model.Thing, syncing bool) error {
 	return nil
 }
 
-func (m *ThingModel) FetchByType(thingType string) (*[]*model.Thing, error) {
+func (m *ThingModel) FetchByType(thingType string, conn redis.Conn) (*[]*model.Thing, error) {
 	m.syncing.Wait()
-	allThings, err := m.FetchAll()
+	allThings, err := m.FetchAll(conn)
 
 	if err != nil {
 		return nil, err
@@ -317,10 +312,10 @@ func (m *ThingModel) FetchByType(thingType string) (*[]*model.Thing, error) {
 	return &filtered, nil
 }
 
-func (m *ThingModel) FetchAll() (*[]*model.Thing, error) {
+func (m *ThingModel) FetchAll(conn redis.Conn) (*[]*model.Thing, error) {
 	m.syncing.Wait()
 
-	ids, err := m.fetchIds()
+	ids, err := m.fetchIds(conn)
 
 	if err != nil {
 		return nil, err
@@ -329,7 +324,7 @@ func (m *ThingModel) FetchAll() (*[]*model.Thing, error) {
 	things := make([]*model.Thing, len(ids))
 
 	for i, id := range ids {
-		things[i], err = m.Fetch(id)
+		things[i], err = m.Fetch(id, conn)
 		if err != nil {
 			return nil, err
 		}
@@ -339,13 +334,13 @@ func (m *ThingModel) FetchAll() (*[]*model.Thing, error) {
 }
 
 // Update a thing, this is currently very optimisic and only changes name and type fields.
-func (m *ThingModel) Update(id string, thing *model.Thing) error {
+func (m *ThingModel) Update(id string, thing *model.Thing, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
 	oldThing := &model.Thing{}
 
-	if err := m.fetch(id, oldThing, false); err != nil {
+	if err := m.fetch(id, oldThing, false, conn); err != nil {
 		return fmt.Errorf("Failed to fetch thing (id:%s): %s", id, err)
 	}
 
@@ -353,7 +348,7 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 	oldThing.Type = thing.Type
 	oldThing.Promoted = thing.Promoted
 
-	if _, err := m.save(id, oldThing); err != nil {
+	if _, err := m.save(id, oldThing, conn); err != nil {
 		return fmt.Errorf("Failed to update thing (id:%s): %s", id, err)
 	}
 
@@ -362,10 +357,8 @@ func (m *ThingModel) Update(id string, thing *model.Thing) error {
 
 // -- Device<->Thing one-to-one relationship --
 
-func (m *ThingModel) deleteRelationshipWithDevice(deviceID string) error {
+func (m *ThingModel) deleteRelationshipWithDevice(deviceID string, conn redis.Conn) error {
 
-	conn := m.Pool.Get()
-	defer conn.Close()
 	defer syncFS()
 
 	_, err := conn.Do("HDEL", "device-thing", deviceID)
@@ -373,9 +366,7 @@ func (m *ThingModel) deleteRelationshipWithDevice(deviceID string) error {
 	return err
 }
 
-func (m *ThingModel) GetThingIDForDevice(deviceID string) (*string, error) {
-	conn := m.Pool.Get()
-	defer conn.Close()
+func (m *ThingModel) GetThingIDForDevice(deviceID string, conn redis.Conn) (*string, error) {
 
 	item, err := conn.Do("HGET", "device-thing", deviceID)
 
@@ -392,9 +383,7 @@ func (m *ThingModel) GetThingIDForDevice(deviceID string) (*string, error) {
 	return &thingID, err
 }
 
-func (m *ThingModel) GetDeviceIDForThing(thingID string) (*string, error) {
-	conn := m.Pool.Get()
-	defer conn.Close()
+func (m *ThingModel) GetDeviceIDForThing(thingID string, conn redis.Conn) (*string, error) {
 
 	allRels, err := redis.Strings(redis.Values(conn.Do("HGETALL", "device-thing")))
 

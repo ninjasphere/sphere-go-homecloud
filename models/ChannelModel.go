@@ -18,19 +18,16 @@ func NewChannelModel() *ChannelModel {
 
 }
 
-func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
+func (m *ChannelModel) Create(deviceID string, channel *model.Channel, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 	defer syncFS()
 
 	channel.DeviceID = deviceID
 
-	if _, err := m.save(deviceID+"-"+channel.ID, channel); err != nil {
+	if _, err := m.save(deviceID+"-"+channel.ID, channel, conn); err != nil {
 		return err
 	}
-
-	conn := m.Pool.Get()
-	defer conn.Close()
 
 	if _, err := conn.Do("SADD", "device:"+deviceID+":channels", channel.ID); err != nil {
 		return err
@@ -39,18 +36,15 @@ func (m *ChannelModel) Create(deviceID string, channel *model.Channel) error {
 	return nil
 }
 
-func (m *ChannelModel) Delete(deviceID string, channelID string) error {
+func (m *ChannelModel) Delete(deviceID string, channelID string, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 	defer syncFS()
 
-	err := m.delete(deviceID + "-" + channelID)
+	err := m.delete(deviceID+"-"+channelID, conn)
 	if err != nil {
 		return err
 	}
-
-	conn := m.Pool.Get()
-	defer conn.Close()
 
 	_, err = conn.Do("SREM", "device:"+deviceID+":channels", channelID)
 
@@ -61,11 +55,9 @@ func (m *ChannelModel) Delete(deviceID string, channelID string) error {
 	return err
 }
 
-func (m *ChannelModel) FetchAll(deviceID string) (*[]*model.Channel, error) {
+func (m *ChannelModel) FetchAll(deviceID string, conn redis.Conn) (*[]*model.Channel, error) {
 	m.syncing.Wait()
 
-	conn := m.Pool.Get()
-	defer conn.Close()
 	ids, err := redis.Strings(conn.Do("SMEMBERS", "device:"+deviceID+":channels"))
 	m.log.Debugf("Found %d channel id(s) for device %s", len(ids), deviceID)
 
@@ -76,7 +68,7 @@ func (m *ChannelModel) FetchAll(deviceID string) (*[]*model.Channel, error) {
 	channels := make([]*model.Channel, len(ids))
 
 	for i, id := range ids {
-		channels[i], err = m.Fetch(deviceID, id)
+		channels[i], err = m.Fetch(deviceID, id, conn)
 		if err != nil {
 			return nil, err
 		}
@@ -85,11 +77,11 @@ func (m *ChannelModel) FetchAll(deviceID string) (*[]*model.Channel, error) {
 	return &channels, nil
 }
 
-func (m *ChannelModel) Fetch(deviceID, channelID string) (*model.Channel, error) {
+func (m *ChannelModel) Fetch(deviceID, channelID string, conn redis.Conn) (*model.Channel, error) {
 	m.syncing.Wait()
 	channel := &model.Channel{}
 
-	if err := m.fetch(deviceID+"-"+channelID, channel, false); err != nil {
+	if err := m.fetch(deviceID+"-"+channelID, channel, false, conn); err != nil {
 		return nil, fmt.Errorf("Failed to fetch channel (device id: %s channel id:%s): %s", deviceID, channelID, err)
 	}
 

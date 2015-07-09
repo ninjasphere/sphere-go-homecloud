@@ -2,7 +2,6 @@ package ts
 
 import (
 	"fmt"
-	"math/rand"
 	"net/url"
 	"time"
 
@@ -51,60 +50,49 @@ func (k *influxRecorder) messageHandler(deliveries <-chan *TimeSeriesPayload) {
 
 func (k *influxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 
-	x := time.Now().AddDate(-2, 0, 0)
+	var key = fmt.Sprintf("%s.%s.%s.%s", t.ThingType, t.Channel, t.Event, t.Site)
 
-	for i := 0; i < 10000; i++ {
-		var key string
+	point := client.Point{
+		Measurement: key,
+		Tags: map[string]string{
+			"user":      config.MustString("userId"),
+			"site":      t.Site,
+			"node":      config.Serial(),
+			"schema":    t.Schema,
+			"channel":   t.Channel,
+			"event":     t.Event,
+			"thing":     t.Thing,
+			"thingType": t.ThingType,
+		},
+		Fields:    map[string]interface{}{},
+		Time:      time.Unix(0, t.Time*int64(time.Millisecond)),
+		Precision: "s",
+	}
 
-		points := []client.Point{}
+	if t._User != "" {
+		point.Tags["user"] = t._User
+	}
 
-		for _, v := range t.Points {
-
-			if v.Path == "" {
-				// sphere.timeseries.161139cf-acd8-11e4-98cf-883314fa95ac.161139cf-acd8-11e4-98cf-883314fa95ac.on-off.state
-				key = fmt.Sprintf("sphere.%s.%s.%s.%s", t.Site, t.Thing, t.Channel, t.Event)
-			} else {
-				// sphere.timeseries.161139cf-acd8-11e4-98cf-883314fa95ac.161139cf-acd8-11e4-98cf-883314fa95ac.light.state.hue
-				key = fmt.Sprintf("sphere.%s.%s.%s.%s.%s", t.Site, t.Thing, t.Channel, t.Event, v.Path)
-			}
-
-			for i := 0; i < 20; i++ {
-
-				x = x.Add(time.Minute)
-
-				point := client.Point{
-					Measurement: key,
-					Tags: map[string]string{
-						"type":      v.Type,
-						"schema":    t.Schema,
-						"thingType": t.ThingType,
-					},
-					Fields: map[string]interface{}{
-						"value": v.Value.(float64) + (rand.Float64() * 20) - 10,
-					},
-					Time:      x.Add(time.Second),
-					Precision: "s",
-				}
-
-				points = append(points, point)
-
-				//spew.Dump(point)
-			}
-
-		}
-
-		bps := client.BatchPoints{
-			Points:          points,
-			Database:        config.String("sphere", "homecloud.influx.database"),
-			RetentionPolicy: "default",
-		}
-
-		//spew.Dump("writing", len(points), points)
-		_, err := k.client.Write(bps)
-		if err != nil {
-			return err
+	for _, p := range t.Points {
+		if p.Path == "" {
+			point.Fields["value"] = p.Value
+		} else {
+			point.Fields[p.Path] = p.Value
 		}
 	}
+
+	bps := client.BatchPoints{
+		Points:          []client.Point{point},
+		Database:        config.String("sphere", "homecloud.influx.database"),
+		RetentionPolicy: "default",
+	}
+
+	//spew.Dump("writing", len(points), points)
+	_, err := k.client.Write(bps)
+	if err != nil {
+		return err
+	}
+
 	//spew.Dump("response", resp, bps)
 	return nil
 }

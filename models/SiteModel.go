@@ -9,6 +9,7 @@ import (
 
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/model"
+	"github.com/ninjasphere/redigo/redis"
 )
 
 type SiteModel struct {
@@ -21,7 +22,7 @@ func NewSiteModel() *SiteModel {
 	}
 }
 
-func (m *SiteModel) Fetch(id string) (*model.Site, error) {
+func (m *SiteModel) Fetch(id string, conn redis.Conn) (*model.Site, error) {
 	m.syncing.Wait()
 
 	if id == "here" {
@@ -30,17 +31,17 @@ func (m *SiteModel) Fetch(id string) (*model.Site, error) {
 
 	site := &model.Site{}
 
-	if err := m.fetch(id, site, false); err != nil {
+	if err := m.fetch(id, site, false, conn); err != nil {
 		return nil, err
 	}
 
 	return site, nil
 }
 
-func (m *SiteModel) FetchAll() (*[]*model.Site, error) {
+func (m *SiteModel) FetchAll(conn redis.Conn) (*[]*model.Site, error) {
 	m.syncing.Wait()
 
-	ids, err := m.fetchIds()
+	ids, err := m.fetchIds(conn)
 
 	if err != nil {
 		return nil, err
@@ -49,7 +50,7 @@ func (m *SiteModel) FetchAll() (*[]*model.Site, error) {
 	sites := make([]*model.Site, len(ids))
 
 	for i, id := range ids {
-		sites[i], err = m.Fetch(id)
+		sites[i], err = m.Fetch(id, conn)
 		if err != nil {
 			return nil, err
 		}
@@ -58,7 +59,7 @@ func (m *SiteModel) FetchAll() (*[]*model.Site, error) {
 	return &sites, nil
 }
 
-func (m *SiteModel) Create(site *model.Site) error {
+func (m *SiteModel) Create(site *model.Site, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -68,14 +69,14 @@ func (m *SiteModel) Create(site *model.Site) error {
 
 	m.log.Debugf("Saving site %s", site.ID)
 
-	updated, err := m.save(site.ID, site)
+	updated, err := m.save(site.ID, site, conn)
 
 	m.log.Debugf("Site was updated? %t", updated)
 
 	return err
 }
 
-func (m *SiteModel) Delete(id string) error {
+func (m *SiteModel) Delete(id string, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -83,10 +84,10 @@ func (m *SiteModel) Delete(id string) error {
 		id = config.MustString("siteId")
 	}
 
-	return m.delete(id)
+	return m.delete(id, conn)
 }
 
-func (m *SiteModel) Update(id string, site *model.Site) error {
+func (m *SiteModel) Update(id string, site *model.Site, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
 
@@ -96,7 +97,7 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 
 	oldSite := &model.Site{}
 
-	if err := m.fetch(id, oldSite, false); err != nil {
+	if err := m.fetch(id, oldSite, false, conn); err != nil {
 		return fmt.Errorf("Failed to fetch site (id:%s): %s", id, err)
 	}
 
@@ -118,7 +119,7 @@ func (m *SiteModel) Update(id string, site *model.Site) error {
 		oldSite.TimeZoneOffset = tz.RawOffset // TODO: Not handling DST. Worth even having?
 	}
 
-	if _, err := m.save(id, oldSite); err != nil {
+	if _, err := m.save(id, oldSite, conn); err != nil {
 		return fmt.Errorf("Failed to update site (id:%s): %s", id, err)
 	}
 
