@@ -450,7 +450,7 @@ func (m *baseModel) getSyncManifest(conn redis.Conn) (*SyncManifest, error) {
 }
 
 func (m *baseModel) SetEventHandler(handler func(event string, payload interface{}) error) {
-	m.log.Infof("Got handler!", handler)
+	m.log.Infof("Got handler! %+v", handler)
 	// FIXME: this method should probably be renamed to SetEventSender.
 	m.sendEvent = handler
 }
