@@ -8,6 +8,7 @@ import (
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
+	"github.com/ninjasphere/go-ninja/rpc"
 	"github.com/ninjasphere/go-ninja/support"
 	"github.com/ninjasphere/inject"
 	"github.com/ninjasphere/redigo/redis"
@@ -70,6 +71,9 @@ func main() {
 			return err
 		},
 	}
+
+	// Not pretty.
+	rpc.RedisPool = pool
 
 	// Wait until we connect to redis successfully.
 	for {
