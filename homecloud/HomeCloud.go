@@ -117,10 +117,10 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 			success := true
 
-			conn := c.Pool.Get()
-
 			for _, model := range syncModels {
 				go func(model syncable) {
+					conn := c.Pool.Get()
+					defer conn.Close()
 					err := model.Sync(syncTimeout, conn)
 					if err != nil {
 						c.log.Warningf("Failed to sync model %s : %s", reflect.TypeOf(model).String(), err)
@@ -138,8 +138,6 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 			case syncComplete <- success:
 			default:
 			}
-
-			conn.Close()
 
 			time.Sleep(interval)
 		}
