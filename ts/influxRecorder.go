@@ -5,15 +5,21 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/influxdb/influxdb/client"
 	"github.com/ninjasphere/go-ninja/config"
 )
 
-type influxRecorder struct {
-	client *client.Client // influxdb client
+type InfluxRecorder struct {
+	client   *client.Client // influxdb client
+	incoming chan *TimeSeriesPayload
 }
 
-func newinfluxRecorder() (*influxRecorder, error) {
+var tps = Tick{
+	name: "TimeSeries per/sec",
+}
+
+func NewInfluxRecorder() (*InfluxRecorder, error) {
 	host, err := url.Parse(fmt.Sprintf("http://%s:%d", config.String("localhost", "homecloud.influx.host"), 8086))
 	if err != nil {
 		return nil, err
@@ -25,30 +31,52 @@ func newinfluxRecorder() (*influxRecorder, error) {
 		return nil, err
 	}
 
-	return &influxRecorder{
-		client: influx,
-	}, nil
+	i := &InfluxRecorder{
+		client:   influx,
+		incoming: make(chan *TimeSeriesPayload),
+	}
 
+	go i.messageHandler()
+
+	tps.start()
+
+	return i, nil
 }
 
-func (k *influxRecorder) messageHandler(deliveries <-chan *TimeSeriesPayload) {
-	for d := range deliveries {
+func (k *InfluxRecorder) Send(p *TimeSeriesPayload) {
+	//k.sendTimeseries([]*TimeSeriesPayload{p})
+	k.incoming <- p
+}
+
+func (k *InfluxRecorder) messageHandler() {
+
+	for p := range k.incoming {
 
 		start := time.Now()
 
-		err := k.sendTimeseries(d)
+		err := k.sendTimeseries(p)
 
 		if err != nil {
 			log.Errorf("failed to post payload: %s", err)
 		}
 
-		log.Debugf("response Time Taken: %v", time.Since(start))
+		log.Debugf("response Time Taken: %v", time.Since(start), p)
 
 	}
 	log.Infof("handle: deliveries channel closed")
+
 }
 
-func (k *influxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
+func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
+
+	bps := client.BatchPoints{
+		Points:          []client.Point{},
+		Database:        config.String("sphere", "homecloud.influx.database"),
+		RetentionPolicy: "default",
+		Precision:       "s",
+	}
+
+	tps.tick()
 
 	var key = fmt.Sprintf("%s.%s.%s.%s", t.ThingType, t.Channel, t.Event, t.Site)
 
@@ -81,18 +109,15 @@ func (k *influxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 		}
 	}
 
-	bps := client.BatchPoints{
-		Points:          []client.Point{point},
-		Database:        config.String("sphere", "homecloud.influx.database"),
-		RetentionPolicy: "default",
-	}
+	bps.Points = append(bps.Points, point)
 
-	//spew.Dump("writing", len(points), points)
-	_, err := k.client.Write(bps)
+	//spew.Dump("writing", len(bps.Points))
+	resp, err := k.client.Write(bps)
 	if err != nil {
-		return err
+		panic(err)
+		//return err
 	}
 
-	//spew.Dump("response", resp, bps)
+	spew.Dump("response", resp, bps)
 	return nil
 }

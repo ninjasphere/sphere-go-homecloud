@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -22,6 +23,7 @@ type TimeSeriesManager struct {
 	Pool         *redis.Pool          `inject:""`
 	outgoing     chan *TimeSeriesPayload
 	log          *logger.Logger
+	influx       *InfluxRecorder
 }
 
 type TimeSeriesPayload struct {
@@ -45,13 +47,13 @@ func (m *TimeSeriesManager) PostConstruct() error {
 	m.outgoing = make(chan *TimeSeriesPayload, 1)
 
 	if config.Bool(false, "homecloud.influx.enable") {
-		influx, err := newinfluxRecorder()
+		var err error
+		m.influx, err = NewInfluxRecorder()
 
 		if err != nil {
 			return err
 		}
 
-		go influx.messageHandler(m.outgoing)
 	}
 
 	return m.Start()
@@ -74,15 +76,9 @@ func (m *TimeSeriesManager) Start() error {
 
 	m.log.Infof("Starting")
 
-	t := Tick{
-		name: "TimeSeries per/sec",
-	}
-	t.start()
-
 	influxEnabled := config.Bool(false, "homecloud.influx.enable")
 
 	m.Conn.GetMqttClient().Subscribe("$device/+/channel/+/event/state", func(topic string, message []byte) {
-		t.tick()
 
 		x, _ := ninja.MatchTopicPattern("$device/:device/channel/:channel/event/state", topic)
 		values := *x
@@ -173,7 +169,7 @@ func (m *TimeSeriesManager) Start() error {
 			payload.TimeZone, payload.TimeOffset = time.Now().Zone()
 
 			if influxEnabled {
-				m.outgoing <- payload
+				m.influx.Send(payload)
 			} else {
 				err = m.Conn.SendNotification("$ninja/services/timeseries", payload)
 				if err != nil {
@@ -201,7 +197,7 @@ func (t *Tick) start() {
 	go func() {
 		for {
 			time.Sleep(time.Second)
-			//spew.Dump(t.name, t.count)
+			spew.Dump(t.name, t.count)
 			t.count = 0
 		}
 	}()
