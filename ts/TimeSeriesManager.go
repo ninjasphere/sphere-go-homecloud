@@ -35,7 +35,7 @@ type TimeSeriesPayload struct {
 	Schema     string                        `json:"schema"`
 	Event      string                        `json:"event"`
 	Points     []schemas.TimeSeriesDatapoint `json:"points"`
-	Time       int64                         `json:"time"`
+	Time       string                        `json:"time"`
 	TimeZone   string                        `json:"timeZone"`
 	TimeOffset int                           `json:"timeOffset"`
 	Site       string                        `json:"site"`
@@ -155,7 +155,7 @@ func (m *TimeSeriesManager) Start() error {
 				Event:     "state",
 				Points:    points,
 				Site:      config.MustString("siteId"),
-				Time:      int64(data["time"].(float64)),
+				Time:      time.Now().Format(time.RFC3339Nano),
 			}
 
 			if user, ok := data["_userOverride"].(string); ok {

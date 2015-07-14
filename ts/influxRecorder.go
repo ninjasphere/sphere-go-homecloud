@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/influxdb/influxdb/client"
 	"github.com/ninjasphere/go-ninja/config"
 )
@@ -70,15 +69,19 @@ func (k *InfluxRecorder) messageHandler() {
 func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 
 	bps := client.BatchPoints{
-		Points:          []client.Point{},
-		Database:        config.String("sphere", "homecloud.influx.database"),
-		RetentionPolicy: "default",
-		Precision:       "s",
+		Points:   []client.Point{},
+		Database: config.String("sphere", "homecloud.influx.database"),
 	}
 
 	tps.tick()
 
 	var key = fmt.Sprintf("%s.%s.%s.%s", t.ThingType, t.Channel, t.Event, t.Site)
+
+	timestamp, err := time.Parse(time.RFC3339Nano, t.Time)
+
+	if err != nil {
+		panic(timestamp)
+	}
 
 	point := client.Point{
 		Measurement: key,
@@ -92,9 +95,8 @@ func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 			"thing":     t.Thing,
 			"thingType": t.ThingType,
 		},
-		Fields:    map[string]interface{}{},
-		Time:      time.Unix(0, t.Time*int64(time.Millisecond)),
-		Precision: "s",
+		Fields: map[string]interface{}{},
+		Time:   timestamp,
 	}
 
 	if t._User != "" {
@@ -111,13 +113,12 @@ func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 
 	bps.Points = append(bps.Points, point)
 
-	//spew.Dump("writing", len(bps.Points))
-	resp, err := k.client.Write(bps)
+	//spew.Dump("writing", bps)
+	_, err = k.client.Write(bps)
 	if err != nil {
 		panic(err)
 		//return err
 	}
 
-	spew.Dump("response", resp, bps)
 	return nil
 }
