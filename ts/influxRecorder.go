@@ -60,7 +60,7 @@ func (k *InfluxRecorder) messageHandler() {
 			log.Errorf("failed to post payload: %s", err)
 		}
 
-		log.Debugf("response Time Taken: %v", time.Since(start), p)
+		log.Debugf("response Time Taken: %v, %v", time.Since(start), p)
 
 	}
 	log.Infof("handle: deliveries channel closed")
