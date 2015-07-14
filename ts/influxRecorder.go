@@ -59,7 +59,7 @@ func (k *InfluxRecorder) messageHandler() {
 			log.Errorf("failed to post payload: %s", err)
 		}
 
-		log.Debugf("response Time Taken: %v", time.Since(start), p)
+		log.Debugf("response Time Taken: %v, %v", time.Since(start), p)
 
 	}
 	log.Infof("handle: deliveries channel closed")
@@ -69,8 +69,9 @@ func (k *InfluxRecorder) messageHandler() {
 func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 
 	bps := client.BatchPoints{
-		Points:   []client.Point{},
-		Database: config.String("sphere", "homecloud.influx.database"),
+		Points:          []client.Point{},
+		Database:        config.String("sphere", "homecloud.influx.database"),
+		RetentionPolicy: "default",
 	}
 
 	tps.tick()
