@@ -73,7 +73,6 @@ func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 		Points:          []client.Point{},
 		Database:        config.String("sphere", "homecloud.influx.database"),
 		RetentionPolicy: "default",
-		Precision:       "s",
 	}
 
 	tps.tick()
@@ -94,7 +93,7 @@ func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 		},
 		Fields:    map[string]interface{}{},
 		Time:      time.Unix(0, t.Time*int64(time.Millisecond)),
-		Precision: "s",
+		Precision: "ns", // note: must use ns precision otherwise times are interpreted incorrectly
 	}
 
 	if t._User != "" {
