@@ -2,6 +2,7 @@ package ts
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"time"
 
@@ -53,7 +54,7 @@ func (k *InfluxRecorder) messageHandler() {
 
 		start := time.Now()
 
-		err := k.sendTimeseries(p)
+		err := k.SendTimeseries([]*TimeSeriesPayload{p})
 
 		if err != nil {
 			log.Errorf("failed to post payload: %s", err)
@@ -66,7 +67,7 @@ func (k *InfluxRecorder) messageHandler() {
 
 }
 
-func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
+func (k *InfluxRecorder) SendTimeseries(ts []*TimeSeriesPayload) error {
 
 	bps := client.BatchPoints{
 		Points:          []client.Point{},
@@ -74,52 +75,67 @@ func (k *InfluxRecorder) sendTimeseries(t *TimeSeriesPayload) error {
 		RetentionPolicy: "default",
 	}
 
-	tps.tick()
+	for _, t := range ts {
+		tps.tick()
 
-	var key = fmt.Sprintf("%s.%s.%s.%s", t.ThingType, t.Channel, t.Event, t.Site)
+		var key = fmt.Sprintf("%s.%s.%s.%s", t.ThingType, t.Channel, t.Event, t.Site)
 
-	timestamp, err := time.Parse(time.RFC3339Nano, t.Time)
+		timestamp, err := time.Parse(time.RFC3339Nano, t.Time)
 
-	if err != nil {
-		panic(timestamp)
-	}
-
-	point := client.Point{
-		Measurement: key,
-		Tags: map[string]string{
-			"user":      config.MustString("userId"),
-			"site":      t.Site,
-			"node":      config.Serial(),
-			"schema":    t.Schema,
-			"channel":   t.Channel,
-			"event":     t.Event,
-			"thing":     t.Thing,
-			"thingType": t.ThingType,
-		},
-		Fields: map[string]interface{}{},
-		Time:   timestamp,
-	}
-
-	if t._User != "" {
-		point.Tags["user"] = t._User
-	}
-
-	for _, p := range t.Points {
-		if p.Path == "" {
-			point.Fields["value"] = p.Value
-		} else {
-			point.Fields[p.Path] = p.Value
+		if err != nil {
+			panic(timestamp)
 		}
-	}
 
-	bps.Points = append(bps.Points, point)
+		point := client.Point{
+			Measurement: key,
+			Tags: map[string]string{
+				"user":      config.MustString("userId"),
+				"site":      t.Site,
+				"node":      config.Serial(),
+				"schema":    t.Schema,
+				"channel":   t.Channel,
+				"event":     t.Event,
+				"thing":     t.Thing,
+				"thingType": t.ThingType,
+			},
+			Fields: map[string]interface{}{},
+			Time:   timestamp,
+		}
+
+		if t._User != "" {
+			point.Tags["user"] = t._User
+		}
+
+		for _, p := range t.Points {
+
+			if fValue, ok := p.Value.(float64); ok {
+				p.Value = toFixed(fValue, 6)
+			}
+			if p.Path == "" {
+				point.Fields["value"] = p.Value
+			} else {
+				point.Fields[p.Path] = p.Value
+			}
+		}
+
+		bps.Points = append(bps.Points, point)
+	}
 
 	//spew.Dump("writing", bps)
-	_, err = k.client.Write(bps)
+	_, err := k.client.Write(bps)
 	if err != nil {
 		panic(err)
 		//return err
 	}
 
 	return nil
+}
+
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
+}
+
+func toFixed(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
 }

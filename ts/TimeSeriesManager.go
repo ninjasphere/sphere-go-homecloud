@@ -27,19 +27,20 @@ type TimeSeriesManager struct {
 }
 
 type TimeSeriesPayload struct {
-	Thing      string                        `json:"thing"`
-	ThingType  string                        `json:"thingType"`
-	Promoted   bool                          `json:"promoted"`
-	Device     string                        `json:"device"`
-	Channel    string                        `json:"channel"`
-	Schema     string                        `json:"schema"`
-	Event      string                        `json:"event"`
-	Points     []schemas.TimeSeriesDatapoint `json:"points"`
-	Time       string                        `json:"time"`
-	TimeZone   string                        `json:"timeZone"`
-	TimeOffset int                           `json:"timeOffset"`
-	Site       string                        `json:"site"`
-	_User      string                        `json:"_"`
+	Thing          string                        `json:"thing"`
+	ThingType      string                        `json:"thingType"`
+	Promoted       bool                          `json:"promoted"`
+	Device         string                        `json:"device"`
+	Channel        string                        `json:"channel"`
+	Schema         string                        `json:"schema"`
+	Event          string                        `json:"event"`
+	Points         []schemas.TimeSeriesDatapoint `json:"points"`
+	Time           string                        `json:"time"`
+	TimeZone       string                        `json:"timeZone"`
+	TimeOffset     int                           `json:"timeOffset"`
+	Site           string                        `json:"site"`
+	ReportingZones map[string]string             `json:"zones"`
+	_User          string                        `json:"_"`
 }
 
 func (m *TimeSeriesManager) PostConstruct() error {
