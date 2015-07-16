@@ -16,7 +16,6 @@ import (
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 	"github.com/ninjasphere/sphere-go-homecloud/rest"
 	"github.com/ninjasphere/sphere-go-homecloud/state"
-	"github.com/ninjasphere/sphere-go-homecloud/ts"
 )
 
 var log = logger.GetLogger("HomeCloud")
@@ -91,7 +90,7 @@ func main() {
 	injectables := []interface{}{}
 
 	injectables = append(injectables, pool, conn)
-	injectables = append(injectables, &homecloud.HomeCloud{}, &ts.TimeSeriesManager{}, &homecloud.DeviceManager{}, &homecloud.ModuleManager{})
+	injectables = append(injectables, &homecloud.HomeCloud{}, &homecloud.TimeSeriesManager{}, &homecloud.DeviceManager{}, &homecloud.ModuleManager{})
 	injectables = append(injectables, state.NewStateManager())
 	injectables = append(injectables, &rest.RestServer{})
 	injectables = append(injectables, models.GetInjectables()...)

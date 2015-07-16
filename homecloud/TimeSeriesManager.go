@@ -1,10 +1,9 @@
-package ts
+package homecloud
 
 import (
 	"encoding/json"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ninjasphere/go-ninja/api"
 	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/logger"
@@ -14,48 +13,18 @@ import (
 	"github.com/ninjasphere/sphere-go-homecloud/models"
 )
 
-var log = logger.GetLogger("ts")
-
 type TimeSeriesManager struct {
 	Conn         *ninja.Connection    `inject:""`
 	ThingModel   *models.ThingModel   `inject:""`
 	ChannelModel *models.ChannelModel `inject:""`
 	Pool         *redis.Pool          `inject:""`
-	outgoing     chan *TimeSeriesPayload
+	outgoing     chan *model.TimeSeriesPayload
 	log          *logger.Logger
-	influx       *InfluxRecorder
-}
-
-type TimeSeriesPayload struct {
-	Thing          string                        `json:"thing"`
-	ThingType      string                        `json:"thingType"`
-	Promoted       bool                          `json:"promoted"`
-	Device         string                        `json:"device"`
-	Channel        string                        `json:"channel"`
-	Schema         string                        `json:"schema"`
-	Event          string                        `json:"event"`
-	Points         []schemas.TimeSeriesDatapoint `json:"points"`
-	Time           string                        `json:"time"`
-	TimeZone       string                        `json:"timeZone"`
-	TimeOffset     int                           `json:"timeOffset"`
-	Site           string                        `json:"site"`
-	ReportingZones map[string]string             `json:"zones"`
-	_User          string                        `json:"_"`
 }
 
 func (m *TimeSeriesManager) PostConstruct() error {
 	m.log = logger.GetLogger("TimeSeriesManager")
-	m.outgoing = make(chan *TimeSeriesPayload, 1)
-
-	if config.Bool(false, "homecloud.influx.enable") {
-		var err error
-		m.influx, err = NewInfluxRecorder()
-
-		if err != nil {
-			return err
-		}
-
-	}
+	m.outgoing = make(chan *model.TimeSeriesPayload, 1)
 
 	return m.Start()
 }
@@ -76,8 +45,6 @@ func init() {
 func (m *TimeSeriesManager) Start() error {
 
 	m.log.Infof("Starting")
-
-	influxEnabled := config.Bool(false, "homecloud.influx.enable")
 
 	m.Conn.GetMqttClient().Subscribe("$device/+/channel/+/event/state", func(topic string, message []byte) {
 
@@ -146,7 +113,7 @@ func (m *TimeSeriesManager) Start() error {
 
 		if len(points) > 0 {
 
-			payload := &TimeSeriesPayload{
+			payload := &model.TimeSeriesPayload{
 				Thing:     thing.ID,
 				ThingType: thing.Type,
 				Promoted:  thing.Promoted,
@@ -159,23 +126,23 @@ func (m *TimeSeriesManager) Start() error {
 				Time:      time.Now().Format(time.RFC3339Nano),
 			}
 
-			if user, ok := data["_userOverride"].(string); ok {
-				payload._User = user
+			/*if user, ok := data["_userOverride"].(string); ok {
+				payload.UserOverride = user
+			}
+
+			if node, ok := data["_nodeOverride"].(string); ok {
+				payload.NodeOverride = node
 			}
 
 			if site, ok := data["_siteOverride"].(string); ok {
-				payload.Site = site
-			}
+				payload.SiteOverride = site
+			}*/
 
 			payload.TimeZone, payload.TimeOffset = time.Now().Zone()
 
-			if influxEnabled {
-				m.influx.Send(payload)
-			} else {
-				err = m.Conn.SendNotification("$ninja/services/timeseries", payload)
-				if err != nil {
-					log.Fatalf("Got a state event, but failed to send time series points. channel: %s on device: %s error: %s", values["channel"], values["device"], err)
-				}
+			err = m.Conn.SendNotification("$ninja/services/timeseries", payload)
+			if err != nil {
+				log.Fatalf("Got a state event, but failed to send time series points. channel: %s on device: %s error: %s", values["channel"], values["device"], err)
 			}
 
 		}
@@ -183,23 +150,4 @@ func (m *TimeSeriesManager) Start() error {
 	})
 
 	return nil
-}
-
-type Tick struct {
-	count int
-	name  string
-}
-
-func (t *Tick) tick() {
-	t.count++
-}
-
-func (t *Tick) start() {
-	go func() {
-		for {
-			time.Sleep(time.Second)
-			spew.Dump(t.name, t.count)
-			t.count = 0
-		}
-	}()
 }
