@@ -25,3 +25,5 @@ _testmain.go
 bin/sphere-go-homecloud
 ./sphere-go-homecloud
 .gopath
+
+sphere-go-homecloud
