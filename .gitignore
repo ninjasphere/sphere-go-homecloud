@@ -27,3 +27,5 @@ bin/sphere-go-homecloud
 .gopath
 
 sphere-go-homecloud
+
+*.pprof
