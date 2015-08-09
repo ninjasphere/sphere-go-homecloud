@@ -90,7 +90,7 @@ func main() {
 	injectables := []interface{}{}
 
 	injectables = append(injectables, pool, conn)
-	injectables = append(injectables, &homecloud.HomeCloud{}, &homecloud.TimeSeriesManager{}, &homecloud.DeviceManager{}, &homecloud.ModuleManager{})
+	injectables = append(injectables, &homecloud.HomeCloud{}, &homecloud.TimeSeriesManager{}, &homecloud.HomeKitManager{}, &homecloud.DeviceManager{}, &homecloud.ModuleManager{})
 	injectables = append(injectables, state.NewStateManager())
 	injectables = append(injectables, &rest.RestServer{})
 	injectables = append(injectables, models.GetInjectables()...)
