@@ -163,9 +163,16 @@ func (m *ThingModel) afterSave(thing *model.Thing, conn redis.Conn) error {
 	return nil
 }
 
-func (m *ThingModel) Delete(id string, deleteDevice bool, conn redis.Conn) error {
+type DeleteRequest struct {
+	ThingID      string `json:"thingID"`
+	DeleteDevice bool   `json:"deleteDevice"`
+}
+
+func (m *ThingModel) Delete(r *DeleteRequest, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
+	id := r.ThingID
+	deleteDevice := r.DeleteDevice
 
 	if deleteDevice {
 		deviceID, err := m.GetDeviceIDForThing(id, conn)

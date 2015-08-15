@@ -138,7 +138,7 @@ func (lr *ThingRouter) PutThingLocation(params martini.Params, r *http.Request, 
 // DeleteThing removes a thing using it's identifier
 func (lr *ThingRouter) DeleteThing(params martini.Params, w http.ResponseWriter, thingModel *models.ThingModel, conn redis.Conn) {
 
-	err := thingModel.Delete(params["id"], true, conn)
+	err := thingModel.Delete(&models.DeleteRequest{ThingID: params["id"], DeleteDevice: true}, conn)
 
 	if err == models.RecordNotFound {
 		WriteServerErrorResponse(fmt.Sprintf("Unknown thing id: %s", params["id"]), http.StatusNotFound, w)
