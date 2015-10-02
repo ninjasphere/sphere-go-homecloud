@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"code.google.com/p/go-uuid/uuid"
+	"github.com/ninjasphere/go-ninja/config"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 	"github.com/ninjasphere/sphere-go-homecloud/state"
@@ -17,6 +18,8 @@ type ThingModel struct {
 	RoomModel    *RoomModel         `inject:""`
 	StateManager state.StateManager `inject:""`
 }
+
+var autoPromote = config.Bool(false, "homecloud.autopromote")
 
 func toThing(obj interface{}) *model.Thing {
 	var thing, ok = obj.(*model.Thing)
@@ -87,6 +90,13 @@ func (m *ThingModel) ensureThingForDevice(device *model.Device, conn redis.Conn)
 
 	if device.Name != nil {
 		thing.Name = *device.Name
+	}
+
+	if autoPromote {
+		if id, err := m.RoomModel.ensureDefaultRoom(conn); err == nil {
+			thing.Location = &id
+			thing.Promoted = true
+		}
 	}
 
 	return m.Create(thing, conn)
