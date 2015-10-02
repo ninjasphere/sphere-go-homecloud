@@ -13,6 +13,7 @@ import (
 type RoomModel struct {
 	baseModel
 
+	SiteModel  *SiteModel  `inject:""`
 	ThingModel *ThingModel `inject:""`
 	Pool       *redis.Pool `inject:""`
 }
@@ -204,4 +205,46 @@ func (m *RoomModel) MoveThing(from *string, to *string, thing string, conn redis
 
 	return err
 
+}
+
+//
+// This procedure checks that that the current site has a default room
+// and, if not, creates one then updates the site to record the identity
+// of the created room.
+//
+func (m *RoomModel) ensureDefaultRoom(conn redis.Conn) (string, error) {
+	if site, err := m.SiteModel.Fetch("here", conn); err != nil {
+		return "", err
+	} else {
+		var room *model.Room
+		var roomID string
+		var err error
+
+		if site.DefaultRoomID != nil && *site.DefaultRoomID != "" {
+			roomID = *site.DefaultRoomID
+			room, err = m.Fetch(roomID, conn)
+		}
+
+		if room != nil && err == nil {
+			return room.ID, nil
+		} else {
+
+			room = &model.Room{
+				Name: "Default Room for Site",
+				Type: "default",
+			}
+
+			if err := m.Create(room, conn); err != nil {
+				return "", err
+			}
+
+			site.DefaultRoomID = &room.ID
+
+			if err := m.SiteModel.Update(site.ID, site, conn); err != nil {
+				return "", err
+			} else {
+				return room.ID, nil
+			}
+		}
+	}
 }
