@@ -106,7 +106,10 @@ func (m *SiteModel) Update(id string, site *model.Site, conn redis.Conn) error {
 	oldSite.SitePreferences = site.SitePreferences
 	oldSite.DefaultRoomID = site.DefaultRoomID
 
-	if (oldSite.Latitude == nil || oldSite.Longitude == nil) || (*oldSite.Latitude != *site.Latitude || *oldSite.Longitude != *site.Longitude) {
+	if site.Latitude != nil &&
+		site.Longitude != nil &&
+		((oldSite.Latitude == nil || oldSite.Longitude == nil) ||
+			(*oldSite.Latitude != *site.Latitude || *oldSite.Longitude != *site.Longitude)) {
 		oldSite.Latitude = site.Latitude
 		oldSite.Longitude = site.Longitude
 
