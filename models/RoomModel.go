@@ -235,12 +235,14 @@ func (m *RoomModel) ensureDefaultRoom(conn redis.Conn) (string, error) {
 			}
 
 			if err := m.Create(room, conn); err != nil {
+				log.Println("failed to create room: %v", err)
 				return "", err
 			}
 
 			site.DefaultRoomID = &room.ID
 
 			if err := m.SiteModel.Update(site.ID, site, conn); err != nil {
+				log.Println("failed to update site: %v", err)
 				return "", err
 			} else {
 				return room.ID, nil
