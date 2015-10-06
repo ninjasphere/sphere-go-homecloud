@@ -92,14 +92,14 @@ func (m *ThingModel) ensureThingForDevice(device *model.Device, conn redis.Conn)
 		thing.Name = *device.Name
 	}
 
-	if autoPromote {
-		if id, err := m.RoomModel.ensureDefaultRoom(conn); err == nil {
-			thing.Location = &id
-			thing.Promoted = true
+	if err = m.Create(thing, conn); err == nil {
+		if autoPromote {
+			if id, err := m.RoomModel.ensureDefaultRoom(conn); err == nil {
+				err = m.SetLocation(thing.ID, &id, conn)
+			}
 		}
 	}
-
-	return m.Create(thing, conn)
+	return err
 }
 
 func (m *ThingModel) Create(thing *model.Thing, conn redis.Conn) error {
