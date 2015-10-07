@@ -92,6 +92,10 @@ func (m *ThingModel) ensureThingForDevice(device *model.Device, conn redis.Conn)
 		thing.Name = *device.Name
 	}
 
+	if autoPromote {
+		thing.Promoted = true
+	}
+
 	if err = m.Create(thing, conn); err == nil {
 		if autoPromote {
 			if id, err := m.RoomModel.ensureDefaultRoom(conn); err == nil {
