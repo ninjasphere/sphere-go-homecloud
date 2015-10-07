@@ -22,6 +22,16 @@ var (
 	RecordUnchanged = errors.New("Record Unchanged")
 )
 
+// A wrapper for the connection type.
+//
+// We need two different connections but the dependency injection
+// framework does not provide a way to support this requirement.
+//
+// So, we use a wrapper type here and inject the wrapper.
+type SyncConnection struct {
+	Conn *ninja.Connection
+}
+
 func newBaseModel(idType string, obj interface{}) baseModel {
 	objType := reflect.TypeOf(obj)
 
@@ -36,6 +46,14 @@ func newBaseModel(idType string, obj interface{}) baseModel {
 
 type baseModel struct {
 	Conn *ninja.Connection `inject:""`
+
+	// A separate connection is required for outbound connections to avoid
+	// a dead lock (on the syncing group) that arises if a fetch request
+	// (from a client) is received while a sync response (from the cloud)
+	// is pending. The inbound request is still blocked, but the blockage
+	// will no longer impede the delivery of the inbound response.
+
+	SyncConn *SyncConnection `inject:""`
 
 	syncing     *sync.WaitGroup
 	idType      string
@@ -282,7 +300,7 @@ func (m *baseModel) Sync(timeout time.Duration, conn redis.Conn) error {
 
 	m.log.Debugf("sync: Sending %d %s local update times", len(*manifest), m.idType)
 
-	calcClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
+	calcClient := m.SyncConn.Conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
 	err = calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, timeout)
 
 	if err != nil {
@@ -333,7 +351,7 @@ func (m *baseModel) Sync(timeout time.Duration, conn redis.Conn) error {
 		}
 	}
 
-	syncClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
+	syncClient := m.SyncConn.Conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
 
 	var syncReply SyncReply
 
@@ -401,7 +419,7 @@ func (m *baseModel) ClearCloud() error {
 
 	manifest := make(map[string]int64)
 
-	calcClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
+	calcClient := m.SyncConn.Conn.GetServiceClient("$ninja/services/rpc/modelstore/calculate_sync_items")
 	err := calcClient.Call("modelstore.calculate_sync_items", []interface{}{m.idType, manifest}, &diffList, time.Second*20)
 
 	if err != nil {
@@ -414,7 +432,7 @@ func (m *baseModel) ClearCloud() error {
 		requestedData[id] = SyncObject{nil, time.Now().UnixNano() / int64(time.Millisecond)}
 	}
 
-	syncClient := m.Conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
+	syncClient := m.SyncConn.Conn.GetServiceClient("$ninja/services/rpc/modelstore/do_sync_items")
 
 	var syncReply SyncReply
 

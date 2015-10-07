@@ -52,6 +52,13 @@ func main() {
 		log.Fatalf("Failed to connect to sphere: %s", err)
 	}
 
+	// An MQTT Connection used for outbound syncing connections
+	syncConn := &models.SyncConnection{}
+	syncConn.Conn, err = ninja.Connect("sphere-go-homecloud.sync")
+	if err != nil {
+		log.Fatalf("Failed to connect to sphere (sync): %s", err)
+	}
+
 	// Our redis pool
 	pool := &redis.Pool{
 		MaxIdle:     config.MustInt("homecloud.redis.maxIdle"),
@@ -89,7 +96,7 @@ func main() {
 	// Build the object graph using dependency injection
 	injectables := []interface{}{}
 
-	injectables = append(injectables, pool, conn)
+	injectables = append(injectables, pool, conn, syncConn)
 	injectables = append(injectables, &homecloud.HomeCloud{}, &homecloud.TimeSeriesManager{}, &homecloud.DeviceManager{}, &homecloud.ModuleManager{})
 	injectables = append(injectables, state.NewStateManager())
 	injectables = append(injectables, &rest.RestServer{})
