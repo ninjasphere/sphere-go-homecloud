@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sync"
+	//"sync"
 	"time"
 
 	"github.com/ninjasphere/go-ninja/api"
@@ -111,14 +111,14 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 
 			c.log.Infof("\n\n\n------ Timed model syncing started (every %s) ------ ", interval.String())
 
-			var wg sync.WaitGroup
+			//var wg sync.WaitGroup
 
-			wg.Add(len(syncModels))
+			//wg.Add(len(syncModels))
 
 			success := true
 
 			for _, model := range syncModels {
-				go func(model syncable) {
+				func(model syncable) {
 					conn := c.Pool.Get()
 					defer conn.Close()
 					err := model.Sync(syncTimeout, conn)
@@ -126,11 +126,11 @@ func (c *HomeCloud) StartSyncing(interval time.Duration) chan bool {
 						c.log.Warningf("Failed to sync model %s : %s", reflect.TypeOf(model).String(), err)
 						success = false
 					}
-					wg.Done()
+					//wg.Done()
 				}(model)
 			}
 
-			wg.Wait()
+			//wg.Wait()
 
 			log.Infof("------ Timed model syncing complete. Success? %t ------\n\n\n", success)
 
