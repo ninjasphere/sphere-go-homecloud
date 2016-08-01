@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"code.google.com/p/go-uuid/uuid"
-
+	"github.com/google/uuid"
 	"github.com/ninjasphere/go-ninja/model"
 	"github.com/ninjasphere/redigo/redis"
 )
