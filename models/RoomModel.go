@@ -73,7 +73,11 @@ func (m *RoomModel) Create(room *model.Room, conn redis.Conn) error {
 	//defer m.sync()
 
 	if room.ID == "" {
-		room.ID = uuid.NewRandom().String()
+		if uuid, err := uuid.NewRandom(); err != nil {
+			return err
+		} else {
+			room.ID = uuid.String()
+		}
 	}
 
 	_, err := m.save(room.ID, room, conn)

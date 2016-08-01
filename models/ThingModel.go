@@ -111,7 +111,11 @@ func (m *ThingModel) Create(thing *model.Thing, conn redis.Conn) error {
 	//defer m.sync()
 
 	if thing.ID == "" {
-		thing.ID = uuid.NewRandom().String()
+		if uuid, err := uuid.NewRandom(); err != nil {
+			return err
+		} else {
+			thing.ID = uuid.String()
+		}
 	}
 
 	_, err := m.save(thing.ID, thing, conn)
