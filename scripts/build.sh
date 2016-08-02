@@ -30,6 +30,7 @@ go get -d -v ./...
 
 # deal with juju/loggo change
 go get github.com/tools/godep
+export PATH=$GOPATH/bin:$PATH
 godep restore
 
 # building the master branch on ci
