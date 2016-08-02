@@ -29,7 +29,7 @@ cd .gopath/src/github.com/${OWNER}/${PROJECT_NAME}
 go get -d -v ./...
 
 # deal with juju/loggo change
-go get github.com/tools/godep
+GOOS= GOARCH= go get github.com/tools/godep
 export PATH=$GOPATH/bin:$PATH
 godep restore
 
