@@ -27,6 +27,9 @@ export GOPATH="$(pwd)/.gopath"
 # move the working path and build
 cd .gopath/src/github.com/${OWNER}/${PROJECT_NAME}
 go get -d -v ./...
+
+# deal with juju/loggo change
+go get github.com/tools/godep
 godep restore
 
 # building the master branch on ci
