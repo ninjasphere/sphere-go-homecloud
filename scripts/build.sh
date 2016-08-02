@@ -27,6 +27,7 @@ export GOPATH="$(pwd)/.gopath"
 # move the working path and build
 cd .gopath/src/github.com/${OWNER}/${PROJECT_NAME}
 go get -d -v ./...
+godep restore
 
 # building the master branch on ci
 if [ "$BUILDBOX_BRANCH" = "master" ]; then
