@@ -289,6 +289,11 @@ func (m *baseModel) Sync(timeout time.Duration, conn redis.Conn) error {
 	m.syncing.Add(1)
 	defer m.syncing.Done()
 
+	if config.NoCloud() {
+		m.log.Infof("sync: syncing disabled because there is no cloud")
+		return nil
+	}
+
 	m.log.Infof("sync: Syncing %ss. Save data from cloud?:%s", m.idType, enableSyncFromCloud)
 
 	var diffList SyncDifferenceList
