@@ -87,6 +87,10 @@ func (m *SiteModel) Delete(id string, conn redis.Conn) error {
 	return m.delete(id, conn)
 }
 
+func (m *SiteModel) Save(site *model.Site, conn redis.Conn) error {
+	return m.Update(site.ID, site, conn)
+}
+
 func (m *SiteModel) Update(id string, site *model.Site, conn redis.Conn) error {
 	m.syncing.Wait()
 	//defer m.sync()
