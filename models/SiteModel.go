@@ -116,11 +116,15 @@ func (m *SiteModel) Update(id string, site *model.Site, conn redis.Conn) error {
 		tz, err := getTimezone(*site.Latitude, *site.Longitude)
 		if err != nil {
 			return fmt.Errorf("Failed to get timezone: %s", err)
+		} else {
+			m.log.Debugf("Timezone (%0.4f, %0.4f) -> %v", *site.Latitude, *site.Longitude, tz)
 		}
 
 		oldSite.TimeZoneID = tz.TimeZoneID
 		oldSite.TimeZoneName = tz.TimeZoneName
 		oldSite.TimeZoneOffset = tz.RawOffset // TODO: Not handling DST. Worth even having?
+	} else {
+		m.log.Debugf("no change to latitude or longitude")
 	}
 
 	if _, err := m.save(id, oldSite, conn); err != nil {
