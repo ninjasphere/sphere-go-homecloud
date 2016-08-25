@@ -358,6 +358,18 @@ func (m *ThingModel) FetchAll(conn redis.Conn) (*[]*model.Thing, error) {
 	return &things, nil
 }
 
+// Update the thing and the related location (room)
+func (m *ThingModel) Save(thing *model.Thing, conn redis.Conn) error {
+	if err := m.Update(thing.ID, thing, conn); err != nil {
+		return err
+	} else {
+		if err := m.SetLocation(thing.ID, thing.Location, conn); err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
 // Update a thing, this is currently very optimisic and only changes name and type fields.
 func (m *ThingModel) Update(id string, thing *model.Thing, conn redis.Conn) error {
 	m.syncing.Wait()
