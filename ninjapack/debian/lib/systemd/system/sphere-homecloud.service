@@ -1,0 +1,11 @@
+[Unit]
+Description=NinjaBlocks HomeCloud Service
+After=network.target 
+
+[Service]
+ExecStart=/bin/bash -c '. /etc/profile.d/ninja.sh && /opt/ninjablocks/sphere-go-homecloud/sphere-go-homecloud $$(sphere-client-args)'
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
