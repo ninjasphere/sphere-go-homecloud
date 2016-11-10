@@ -1,3 +1,4 @@
 # restart will not start a stopped service - this meets requirements
-sudo systemctl stop sphere-homecloud || true
-sudo systemctl start sphere-homecloud || true
+systemctl enable sphere-homecloud
+systemctl stop sphere-homecloud || true
+systemctl start sphere-homecloud || true
